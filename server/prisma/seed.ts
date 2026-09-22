@@ -706,6 +706,9 @@ async function main() {
       description:
         'Visite a MHM Farms: uma quinta e espaço de conservação animal em Moçambique. Animais, natureza, atividades em família e programas educativos.',
     },
+    branding: {
+      logo: '',
+    },
   }
 
   for (const [key, value] of Object.entries(settings)) {

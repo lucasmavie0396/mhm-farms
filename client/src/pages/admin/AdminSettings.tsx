@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Save } from 'lucide-react'
-import { api } from '../../lib/api'
+import { Save, Trash2, Upload, Loader2 } from 'lucide-react'
+import { api, uploadFile } from '../../lib/api'
 import { usePageMeta } from '../../lib/seo'
 import { Notice, PageHead, Spinner } from '../../components/admin'
 import type { PublicSettings } from '../../lib/types'
@@ -8,6 +8,7 @@ import type { PublicSettings } from '../../lib/types'
 type Section = { title: string; key: string }
 
 const SECTIONS: Section[] = [
+  { title: 'Logótipo', key: 'branding' },
   { title: 'Preços', key: 'prices' },
   { title: 'Horários', key: 'hours' },
   { title: 'Aviso de Horários', key: 'hoursNotice' },
@@ -24,6 +25,7 @@ export default function AdminSettings() {
   const [settings, setSettings] = useState<PublicSettings>({})
   const [loading, setLoading] = useState(true)
   const [savingKey, setSavingKey] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
   const [msg, setMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
 
   const load = async () => {
@@ -83,6 +85,23 @@ export default function AdminSettings() {
     setSection('social', obj as never)
   }
 
+  const onLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setMsg(null)
+    try {
+      const url = await uploadFile(file)
+      const obj = { ...((settings.branding as Record<string, string>) || {}), logo: url }
+      setSection('branding', obj as never)
+    } catch (err) {
+      setMsg({ kind: 'error', text: err instanceof Error ? err.message : 'Erro ao enviar o logótipo.' })
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
   if (loading) return <Spinner />
 
   return (
@@ -104,6 +123,45 @@ export default function AdminSettings() {
               {savingKey === sec.key ? 'A guardar…' : 'Guardar'}
             </button>
           </div>
+
+          {sec.key === 'branding' && (
+            <div>
+              <p className="mb-4 text-sm text-forest-800/60">
+                Carregue o logótipo da quinta. Será mostrado no cabeçalho do site.
+              </p>
+              <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-forest-100 bg-forest-50/50 p-4">
+                <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-2xl bg-white shadow-inner">
+                  {settings.branding?.logo ? (
+                    <img src={settings.branding.logo} alt="Pré-visualização do logótipo" className="h-full w-full object-contain p-2" />
+                  ) : (
+                    <span className="text-3xl font-bold text-forest-300">MH</span>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-forest-300 bg-white px-4 py-2.5 text-sm font-semibold text-forest-800 hover:bg-forest-100">
+                    {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    {uploading ? 'A enviar…' : 'Carregar logótipo'}
+                    <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif,image/bmp" className="hidden" onChange={onLogoFile} disabled={uploading} />
+                  </label>
+                  {settings.branding?.logo && (
+                    <button
+                      type="button"
+                      onClick={() => setSection('branding', { logo: '' } as never)}
+                      disabled={uploading}
+                      className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Remover
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="mt-4">
+                <label className="field-label">URL do logótipo</label>
+                <input value={settings.branding?.logo || ''} onChange={input('branding', 'logo')} placeholder="https://… ou use o botão acima" />
+              </div>
+            </div>
+          )}
 
           {sec.key === 'prices' && (
             <div>

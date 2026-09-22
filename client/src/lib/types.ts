@@ -197,6 +197,9 @@ export interface PublicSettings {
     title: string
     description: string
   }
+  branding?: {
+    logo: string
+  }
 }
 
 export interface DashboardData {

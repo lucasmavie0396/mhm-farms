@@ -7,7 +7,7 @@ import { getSetting } from '../config'
 
 const router = Router()
 
-const PUBLIC_KEYS = ['prices', 'hours', 'hoursNotice', 'contacts', 'social', 'maps', 'home', 'about', 'seo']
+const PUBLIC_KEYS = ['prices', 'hours', 'hoursNotice', 'contacts', 'social', 'maps', 'home', 'about', 'seo', 'branding']
 
 router.get('/public', async (_req, res) => {
   const settings = await prisma.setting.findMany({ where: { key: { in: PUBLIC_KEYS } } })

@@ -80,17 +80,27 @@ const NAV_ITEMS = [
 ]
 
 function Logo() {
+  const { settings } = useSettings()
+  const logo = settings.branding?.logo
   return (
     <Link to="/" className="flex items-center gap-2.5">
-      <span className="grid h-11 w-11 place-items-center rounded-2xl bg-forest-700 font-display text-lg font-bold text-gold-500 shadow-md">
-        MH
-      </span>
-      <span className="leading-tight">
-        <span className="block font-display text-xl font-bold text-white">MHM Farms</span>
-        <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gold-500">
-          Onde a Natureza Ganha Vida
+      {logo ? (
+        <span className="grid h-11 w-auto max-w-[180px] place-items-center overflow-hidden">
+          <img src={logo} alt="MHM Farms" className="max-h-11 w-auto object-contain" />
         </span>
-      </span>
+      ) : (
+        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-forest-700 font-display text-lg font-bold text-gold-500 shadow-md">
+          MH
+        </span>
+      )}
+      {!logo && (
+        <span className="leading-tight">
+          <span className="block font-display text-xl font-bold text-white">MHM Farms</span>
+          <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gold-500">
+            {settings.home?.heroSubtitle || 'Onde a Natureza Ganha Vida'}
+          </span>
+        </span>
+      )}
     </Link>
   )
 }
