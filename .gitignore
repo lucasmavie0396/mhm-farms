@@ -7,4 +7,5 @@ build/
 .DS_Store
 server/prisma/*.db
 server/prisma/*.db-journal
+server/uploads/
 client/.vite/

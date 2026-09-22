@@ -37,3 +37,17 @@ export async function api<T>(
   }
   return data as T
 }
+
+export async function uploadFile(file: File): Promise<string> {
+  const body = new FormData()
+  body.append('file', file)
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+  const res = await fetch('/api/uploads', { method: 'POST', headers, body })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new ApiError(data.error || 'Erro ao enviar a imagem.', res.status)
+  }
+  return data.url as string
+}

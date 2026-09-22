@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Pencil, ToggleLeft, ToggleRight } from 'lucide-react'
-import { api } from '../../lib/api'
+import { Pencil, ToggleLeft, ToggleRight, Upload, Link as LinkIcon, Loader2 } from 'lucide-react'
+import { api, uploadFile } from '../../lib/api'
 import { usePageMeta } from '../../lib/seo'
 import { AddButton, ConfirmDelete, Modal, Notice, PageHead, Table, Spinner } from '../../components/admin'
 import type { GalleryItem } from '../../lib/types'
@@ -16,6 +16,7 @@ export default function AdminGallery() {
   const [form, setForm] = useState({ title: '', category: 'animais', type: 'IMAGE', url: '', videoUrl: '' })
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -32,6 +33,22 @@ export default function AdminGallery() {
 
   const update = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm({ ...form, [k]: e.target.value })
+
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setError('')
+    try {
+      const url = await uploadFile(file)
+      setForm({ ...form, type: 'IMAGE', url, videoUrl: '' })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao enviar a imagem.')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -155,9 +172,20 @@ export default function AdminGallery() {
               </select>
             </div>
           </div>
+          <div className="border-2 border-dashed border-forest-200 rounded-2xl p-4">
+            <label className="field-label">Carregar foto do computador</label>
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-forest-300 bg-forest-50 px-4 py-2.5 text-sm font-semibold text-forest-800 hover:bg-forest-100">
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {uploading ? 'A enviar…' : 'Escolher ficheiro'}
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif,image/bmp" className="hidden" onChange={onFile} disabled={uploading} />
+            </label>
+          </div>
           <div>
             <label className="field-label">URL da Imagem *</label>
-            <input value={form.url} onChange={update('url')} placeholder="https://…" />
+            <div className="relative">
+              <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-forest-400" />
+              <input value={form.url} onChange={update('url')} placeholder="https://… ou use o botão acima" className="!pl-10" />
+            </div>
             {form.url && <img src={form.url} alt="" className="mt-2 h-32 rounded-xl object-cover" />}
           </div>
           <div>

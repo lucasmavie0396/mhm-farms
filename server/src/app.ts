@@ -20,6 +20,7 @@ import settingRoutes from './routes/settings'
 import dashboardRoutes from './routes/dashboard'
 import userRoutes from './routes/users'
 import feedbackRoutes from './routes/feedback'
+import uploadRoutes, { uploadsDir } from './routes/uploads'
 
 export function createApp() {
   const app = express()
@@ -67,6 +68,9 @@ export function createApp() {
   app.use('/api/dashboard', apiLimiter, dashboardRoutes)
   app.use('/api/users', apiLimiter, userRoutes)
   app.use('/api/feedback', apiLimiter, feedbackRoutes)
+  app.use('/api/uploads', apiLimiter, uploadRoutes)
+
+  app.use('/uploads', express.static(uploadsDir))
 
   // Servir o build do cliente em produção
   const clientDist = path.resolve(process.cwd(), '../client/dist')
@@ -84,6 +88,11 @@ export function createApp() {
       res: express.Response,
       _next: express.NextFunction
     ) => {
+      const e = err as Error & { code?: string }
+      if (e.code === 'LIMIT_FILE_SIZE') {
+        res.status(400).json({ error: 'A imagem é demasiado grande (máx. 8 MB).' })
+        return
+      }
       console.error(err)
       res
         .status(err.status || 500)
