@@ -51,9 +51,8 @@ export default function AdminReservations() {
   }
 
   const [pdfBusy, setPdfBusy] = useState<string | null>(null)
-  const [preview, setPreview] = useState<{ url: string; code: string } | null>(null)
 
-  const openPdf = async (id: string, code: string) => {
+  const openPdf = async (id: string) => {
     if (pdfBusy) return
     setPdfBusy(id)
     try {
@@ -67,25 +66,21 @@ export default function AdminReservations() {
       }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
-      setPreview({ url, code })
+      const win = window.open(url, '_blank', 'noopener')
+      if (!win) {
+        const a = document.createElement('a')
+        a.href = url
+        a.target = '_blank'
+        a.rel = 'noopener'
+        a.click()
+      }
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      if (win) win.focus()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Erro ao gerar o PDF.')
     } finally {
       setPdfBusy(null)
     }
-  }
-
-  const saveFromPreview = () => {
-    if (!preview) return
-    const a = document.createElement('a')
-    a.href = preview.url
-    a.download = `reserva-${preview.code}.pdf`
-    a.click()
-  }
-
-  const closePreview = () => {
-    if (preview) URL.revokeObjectURL(preview.url)
-    setPreview(null)
   }
 
   const exportCsv = () => {
@@ -184,7 +179,7 @@ export default function AdminReservations() {
                   <Eye className="h-4 w-4" />
                 </button>
                 <button
-                  onClick={() => openPdf(r.id, r.code)}
+                  onClick={() => openPdf(r.id)}
                   disabled={pdfBusy === r.id}
                   className="rounded-lg px-3 py-2 text-forest-700 hover:bg-forest-100"
                   title="Reimprimir PDF"
@@ -282,38 +277,13 @@ export default function AdminReservations() {
                   </div>
                 </div>
                 <button
-                  onClick={() => openPdf(view.id, view.code)}
+                  onClick={() => openPdf(view.id)}
                   disabled={pdfBusy === view.id}
                   className="btn-outline !py-2.5"
                 >
                   {pdfBusy === view.id ? <FileDown className="h-4 w-4 animate-pulse" /> : <Printer className="h-4 w-4" />}
                   Reimprimir PDF
                 </button>
-          </div>
-        )}
-      </Modal>
-
-      <Modal open={!!preview} onClose={closePreview} title={`Pré-visualização · Reserva ${preview?.code || ''}`} xl>
-        {preview && (
-          <div className="-m-6 flex flex-col">
-            <div className="bg-forest-50 px-6 py-4">
-              <p className="text-sm text-forest-800/70">
-                Confirme o documento antes de o guardar. Se estiver tudo certo, escolha{' '}
-                <strong className="text-forest-900">Transferir</strong>.
-              </p>
-            </div>
-            <div className="p-6 pt-4">
-              <iframe src={preview.url} title={`Confirmação ${preview.code}`} className="h-[62vh] w-full rounded-xl border border-forest-100 bg-white" />
-            </div>
-            <div className="flex items-center justify-end gap-3 border-t border-forest-100 px-6 py-4">
-              <button onClick={closePreview} className="btn-outline !py-2.5">
-                Fechar
-              </button>
-              <button onClick={saveFromPreview} className="btn-primary !py-2.5">
-                <FileDown className="h-4 w-4" />
-                Transferir PDF
-              </button>
-            </div>
           </div>
         )}
       </Modal>
