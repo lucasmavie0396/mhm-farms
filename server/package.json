@@ -12,7 +12,10 @@
     "db:migrate": "prisma migrate dev --name init",
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset --force",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "export:json": "tsx src/scripts/export-content.ts",
+    "sync:json": "tsx src/scripts/sync-json.ts",
+    "watch:json": "tsx src/scripts/watch-json.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -20,6 +23,7 @@
   "dependencies": {
     "@prisma/client": "^6.5.0",
     "bcryptjs": "^3.0.2",
+    "chokidar": "^4.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",

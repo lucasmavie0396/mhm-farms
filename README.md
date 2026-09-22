@@ -4,7 +4,7 @@ Site institucional + painel de gestão da **MHM Farms** (quinta e espaço de con
 
 - **Cliente:** React 18 + TypeScript + Vite + Tailwind CSS v4 (PT/EN/FR)
 - **Servidor:** Node.js + Express 5 + TypeScript + Prisma
-- **Base de dados:** SQLite por predefinição (compatível com PostgreSQL/MySQL)
+- **Base de dados:** MySQL/MariaDB (ex.: XAMPP) — compatível também com SQLite/PostgreSQL
 
 ---
 
@@ -33,18 +33,37 @@ Isto executa em paralelo:
 
 ## Base de dados
 
-A primeira vez (ou depois de `npm run db:reset`):
+### MySQL (configuração atual)
 
-```bash
-npm run db:setup    # gera o Prisma Client, aplica migrações e faz seed
-```
+1. Tenha MySQL/MariaDB a correr (ex.: XAMPP → painel → Start MySQL). A porta predefinida é 3306.
+2. Defina `DATABASE_URL` no `server/.env`. Exemplo local (XAMPP `root` sem palavra-passe):
+   `DATABASE_URL="mysql://root@localhost:3306/mhm_farms"`
+3. A primeira vez (ou depois de `npm run db:reset`):
 
-Também pode aplicar migração e seed manualmente:
+   ```bash
+   npm run db:setup    # gera o Prisma Client, aplica migrações e faz seed
+   npm run db:sync     # espelha o conteúdo do content.json para o MySQL
+   ```
 
-```bash
-npm run db:migrate
-npm run db:seed
-```
+### SQLite / PostgreSQL
+
+Para desenvolvimento sem MySQL, mude o `provider` do `datasource db` em `server/prisma/schema.prisma` para `sqlite` ou `postgresql` e ajuste `DATABASE_URL`.
+
+## Conteúdo em ficheiro JSON (fonte de verdade)
+
+O conteúdo publicável (animais, experiências, eventos, notícias, galeria, FAQ e definições de preços/horários/contactos/SEO) vive em **`server/data/content.json`** e é **a fonte de verdade**.
+
+| Comando            | O que faz                                                        |
+| ------------------ | ---------------------------------------------------------------- |
+| `npm run db:sync`  | Sincroniza `content.json` → MySQL (uma vez)                      |
+| `npm run json:watch` | Watcher em **tempo real**: guardou o ficheiro, o MySQL é atualizado automaticamente |
+| `npm run json:export` | Gera `content.json` a partir do estado atual da base de dados  |
+
+Fluxos de trabalho:
+
+- **Editar conteúdo pelo ficheiro:** altere `server/data/content.json`, guarde e o `json:watch` aplica tudo no MySQL em segundos. O site continua a ler tudo do MySQL.
+- **Manter o watcher sempre ligado em dev:** `npm run dev` + `npm run json:watch` (janelas separadas), ou apenas `npm run json:watch` quando quiser sincronizar em tempo real.
+- **Cuidado:** como o JSON é a fonte de verdade, edições feitas pelo painel nas áreas de conteúdo são substituídas na próxima sincronização. Dados operacionais (utilizadores, reservas, visitas escolares, mensagens, avaliações) **não** fazem parte do JSON e ficam apenas no MySQL.
 
 ### Contas de demonstração (seed)
 
@@ -74,6 +93,9 @@ npm run db:seed
 | `npm run db:setup`  | generate + migrate + seed                          |
 | `npm run db:reset`  | Apaga e recria a base com seed                     |
 | `npm run db:studio` | Prisma Studio (editor visual da BD)                |
+| `npm run db:sync`   | Sincroniza `content.json` → MySQL                  |
+| `npm run json:watch`| Watcher em tempo real do `content.json`            |
+| `npm run json:export`| Gera `content.json` a partir da base de dados     |
 
 ## Primeiro acesso ao painel
 
@@ -95,4 +117,5 @@ Imagens são inseridas por URL (o painel não faz upload de ficheiros).
 - Rotas protegidas: `/admin` exige login; ações de escrita exigem `ADMIN` ou `MANAGER`.
 - As reservas geram códigos `MHM-AAAA-NNNNNN` e calculam o preço a partir da definição `prices` (+ preço de experiência, se selecionada).
 - Sitemap (`/sitemap.xml`), `robots.txt` e dados `schema.org` estão em `client/public` — atualize os URLs se o domínio real for diferente de `mhmfarms.com`.
-- Backups: basta copiar o ficheiro `server/prisma/dev.db`.
+- Conteúdo do site: edite `server/data/content.json` (o MySQL sincroniza em tempo real com `npm run json:watch`).
+- Backups: `server/data/content.json` (conteúdo) + dump da base MySQL (dados operacionais).

@@ -1,7 +1,6 @@
 // MHM Farms — Prisma schema
-// Por predefinição usa SQLite para desenvolvimento local (zero configuração).
-// Para PostgreSQL: altere o provider para "postgresql" e defina DATABASE_URL.
-// Para MySQL/MariaDB: altere o provider para "mysql".
+// Base de dados principal: MySQL/MariaDB (ex.: XAMPP)
+// Para desenvolvimento rápido sem MySQL pode voltar a "sqlite" e ajustar DATABASE_URL.
 
 generator client {
   provider        = "prisma-client-js"
@@ -9,7 +8,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -74,10 +73,10 @@ model Animal {
   habitat           String?
   diet              String?
   lifeExpectancy    String?
-  description       String
-  curiosity         String?
-  funFact           String?
-  behavior          String?
+  description       String    @db.Text
+  curiosity         String?   @db.Text
+  funFact           String?   @db.Text
+  behavior          String?   @db.Text
   featured          Boolean       @default(false)
   active            Boolean       @default(true)
   mainImage         String
@@ -91,7 +90,7 @@ model AnimalImage {
   id        String @id @default(cuid())
   animalId  String
   animal    Animal @relation(fields: [animalId], references: [id], onDelete: Cascade)
-  url       String
+  url       String    @db.Text
   alt       String?
   sortOrder Int    @default(0)
 }
@@ -110,9 +109,9 @@ model Experience {
   id          String           @id @default(cuid())
   slug        String           @unique
   title       String
-  shortDesc   String
-  description String?
-  image       String
+  shortDesc   String    @db.Text
+  description String?   @db.Text
+  image       String    @db.Text
   type        ExperienceType
   duration    String
   minAge      String
@@ -134,9 +133,9 @@ model Event {
   date           DateTime
   time           String
   location       String
-  description    String
-  image          String
-  price          Float   @default(0)
+  description    String    @db.Text
+  image          String    @db.Text
+  price          Float     @default(0)
   maxParticipants Int?
   active         Boolean @default(true)
   featured       Boolean @default(false)
@@ -156,7 +155,7 @@ model Reservation {
   name         String
   phone        String
   email        String
-  notes        String?
+  notes        String?   @db.Text
   experienceId String?
   experience   Experience?       @relation(fields: [experienceId], references: [id])
   status       ReservationStatus @default(PENDING)
@@ -175,7 +174,7 @@ model SchoolVisit {
   numTeachers  Int
   schoolLevel  String?
   preferredDate DateTime?
-  message      String?
+  message      String?   @db.Text
   status       SchoolVisitStatus @default(PENDING)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -186,8 +185,8 @@ model GalleryItem {
   title     String?
   category  String  @default("animais")
   type      String  @default("IMAGE")
-  url       String
-  videoUrl  String?
+  url       String    @db.Text
+  videoUrl  String?   @db.Text
   active    Boolean @default(true)
   createdAt DateTime @default(now())
 }
@@ -196,8 +195,8 @@ model News {
   id        String @id @default(cuid())
   slug      String @unique
   title     String
-  content   String
-  image     String?
+  content   String    @db.LongText
+  image     String?   @db.Text
   date      DateTime
   author    String
   category  String
@@ -209,8 +208,8 @@ model News {
 
 model Faq {
   id       String @id @default(cuid())
-  question String
-  answer   String
+  question String  @db.Text
+  answer   String  @db.LongText
   category String @default("geral")
   order    Int    @default(0)
   active   Boolean @default(true)
@@ -221,8 +220,8 @@ model ContactMessage {
   name      String
   email     String
   phone     String?
-  subject   String
-  message   String
+  subject   String        @db.Text
+  message   String        @db.LongText
   status    ContactStatus @default(NEW)
   createdAt DateTime      @default(now())
 }
@@ -230,14 +229,14 @@ model ContactMessage {
 model Setting {
   id    String @id @default(cuid())
   key   String @unique
-  value String
+  value String @db.LongText
 }
 
 model Feedback {
   id        String   @id @default(cuid())
   name      String
   rating    Int
-  comment   String
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  comment   String    @db.Text
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
 }
