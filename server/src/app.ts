@@ -18,6 +18,7 @@ import faqRoutes from './routes/faq'
 import contactRoutes from './routes/contacts'
 import settingRoutes from './routes/settings'
 import dashboardRoutes from './routes/dashboard'
+import reportRoutes from './routes/reports'
 import userRoutes from './routes/users'
 import feedbackRoutes from './routes/feedback'
 import uploadRoutes, { uploadsDir } from './routes/uploads'
@@ -66,6 +67,7 @@ export function createApp() {
   app.use('/api/contacts', apiLimiter, contactRoutes)
   app.use('/api/settings', apiLimiter, settingRoutes)
   app.use('/api/dashboard', apiLimiter, dashboardRoutes)
+  app.use('/api/reports', apiLimiter, reportRoutes)
   app.use('/api/users', apiLimiter, userRoutes)
   app.use('/api/feedback', apiLimiter, feedbackRoutes)
   app.use('/api/uploads', apiLimiter, uploadRoutes)

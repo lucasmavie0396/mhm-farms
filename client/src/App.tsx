@@ -30,6 +30,7 @@ import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminAnimals from './pages/admin/AdminAnimals'
 import AdminReservations from './pages/admin/AdminReservations'
+import AdminReports from './pages/admin/AdminReports'
 import AdminSchoolVisits from './pages/admin/AdminSchoolVisits'
 import AdminEvents from './pages/admin/AdminEvents'
 import AdminNews from './pages/admin/AdminNews'
@@ -110,6 +111,7 @@ export default function App() {
                   }
                 />
                 <Route path="reservas" element={<AdminReservations />} />
+                <Route path="relatorios" element={<AdminReports />} />
                 <Route path="visitas-escolares" element={<AdminSchoolVisits />} />
                 <Route
                   path="eventos"

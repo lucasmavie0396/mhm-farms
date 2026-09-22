@@ -1,5 +1,6 @@
 import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom'
 import {
+  BarChart3,
   CalendarDays,
   ClipboardList,
   FileText,
@@ -19,6 +20,7 @@ import { useAuth, ROLE_LABELS } from '../../lib/settings'
 const NAV = [
   { to: '/admin', label: 'Dashboard', Icon: LayoutDashboard, end: true },
   { to: '/admin/reservas', label: 'Reservas', Icon: Ticket },
+  { to: '/admin/relatorios', label: 'Relatórios', Icon: BarChart3 },
   { to: '/admin/animais', label: 'Animais', Icon: PawPrint },
   { to: '/admin/experiencias', label: 'Experiências', Icon: Sparkles },
   { to: '/admin/eventos', label: 'Eventos', Icon: CalendarDays },

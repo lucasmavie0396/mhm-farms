@@ -228,3 +228,34 @@ export interface Feedback {
   comment: string
   active: boolean
 }
+
+export interface RevenueReport {
+  range: { from: string; to: string; status: string }
+  summary: {
+    reservations: number
+    visitors: number
+    revenue: number
+    pendingValue: number
+    confirmed: number
+    completed: number
+    cancelled: number
+    pending: number
+  }
+  byDay: { name: string; count: number; revenue: number; visitors: number }[]
+  byStatus: { name: string; count: number; revenue: number; visitors: number }[]
+  byService: { name: string; qty: number; revenue: number }[]
+  reservations: {
+    id: string
+    code: string
+    date: string
+    time: string
+    name: string
+    email: string
+    phone: string
+    visitors: number
+    visitType: string
+    experience: string | null
+    status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED'
+    totalPrice: number
+  }[]
+}
