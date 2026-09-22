@@ -1,0 +1,243 @@
+// MHM Farms — Prisma schema
+// Por predefinição usa SQLite para desenvolvimento local (zero configuração).
+// Para PostgreSQL: altere o provider para "postgresql" e defina DATABASE_URL.
+// Para MySQL/MariaDB: altere o provider para "mysql".
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = []
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+enum AnimalCategory {
+  MAMIFERO
+  AVE
+  REPTIL
+  DOMESTICO
+  OUTRO
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum PublicationStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ContactStatus {
+  NEW
+  READ
+  ARCHIVED
+}
+
+enum SchoolVisitStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  phone        String?
+  passwordHash String
+  role         Role     @default(STAFF)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Animal {
+  id                String        @id @default(cuid())
+  slug              String        @unique
+  name              String
+  species           String
+  family            String?
+  category          AnimalCategory
+  habitat           String?
+  diet              String?
+  lifeExpectancy    String?
+  description       String
+  curiosity         String?
+  funFact           String?
+  behavior          String?
+  featured          Boolean       @default(false)
+  active            Boolean       @default(true)
+  mainImage         String
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  images            AnimalImage[]
+  experiences       Experience[]
+}
+
+model AnimalImage {
+  id        String @id @default(cuid())
+  animalId  String
+  animal    Animal @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String?
+  sortOrder Int    @default(0)
+}
+
+enum ExperienceType {
+  VISITA
+  ALIMENTACAO
+  PASSEIO
+  EDUCACAO
+  FAMILIA
+  EVENTO
+  AVENTURA
+}
+
+model Experience {
+  id          String           @id @default(cuid())
+  slug        String           @unique
+  title       String
+  shortDesc   String
+  description String?
+  image       String
+  type        ExperienceType
+  duration    String
+  minAge      String
+  price       Float            @default(0)
+  availability Boolean         @default(true)
+  featured    Boolean          @default(false)
+  active      Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  animalId    String?
+  animal      Animal?          @relation(fields: [animalId], references: [id])
+  reservations Reservation[]
+}
+
+model Event {
+  id             String  @id @default(cuid())
+  slug           String  @unique
+  title          String
+  date           DateTime
+  time           String
+  location       String
+  description    String
+  image          String
+  price          Float   @default(0)
+  maxParticipants Int?
+  active         Boolean @default(true)
+  featured       Boolean @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Reservation {
+  id           String            @id @default(cuid())
+  code         String            @unique
+  date         DateTime
+  time         String
+  adults       Int               @default(1)
+  children     Int               @default(0)
+  totalVisitors Int
+  visitType    String
+  name         String
+  phone        String
+  email        String
+  notes        String?
+  experienceId String?
+  experience   Experience?       @relation(fields: [experienceId], references: [id])
+  status       ReservationStatus @default(PENDING)
+  totalPrice   Float             @default(0)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+model SchoolVisit {
+  id           String            @id @default(cuid())
+  schoolName   String
+  teacherName  String
+  email        String
+  phone        String
+  numStudents  Int
+  numTeachers  Int
+  schoolLevel  String?
+  preferredDate DateTime?
+  message      String?
+  status       SchoolVisitStatus @default(PENDING)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model GalleryItem {
+  id        String  @id @default(cuid())
+  title     String?
+  category  String  @default("animais")
+  type      String  @default("IMAGE")
+  url       String
+  videoUrl  String?
+  active    Boolean @default(true)
+  createdAt DateTime @default(now())
+}
+
+model News {
+  id        String @id @default(cuid())
+  slug      String @unique
+  title     String
+  content   String
+  image     String?
+  date      DateTime
+  author    String
+  category  String
+  active    Boolean @default(true)
+  featured  Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Faq {
+  id       String @id @default(cuid())
+  question String
+  answer   String
+  category String @default("geral")
+  order    Int    @default(0)
+  active   Boolean @default(true)
+}
+
+model ContactMessage {
+  id        String        @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String
+  message   String
+  status    ContactStatus @default(NEW)
+  createdAt DateTime      @default(now())
+}
+
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  name      String
+  rating    Int
+  comment   String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}

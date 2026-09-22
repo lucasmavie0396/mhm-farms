@@ -1,0 +1,221 @@
+import { useEffect, useMemo, useState } from 'react'
+import { CheckCircle2, Download, Eye, Search, XCircle } from 'lucide-react'
+import { api } from '../../lib/api'
+import { usePageMeta } from '../../lib/seo'
+import { formatDateShort, formatMoney } from '../../lib/settings'
+import { STATUS_LABELS, STATUS_STYLES } from '../../components/ui'
+import { ConfirmDelete, Modal, PageHead, Spinner, Table } from '../../components/admin'
+import type { Reservation } from '../../lib/types'
+
+const STATUS_OPTIONS = ['todos', 'PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED']
+
+export default function AdminReservations() {
+  usePageMeta('Gerir Reservas')
+  const [items, setItems] = useState<Reservation[]>([])
+  const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState('todos')
+  const [query, setQuery] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [view, setView] = useState<Reservation | null>(null)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const qs = new URLSearchParams()
+      if (status !== 'todos') qs.set('status', status)
+      if (query) qs.set('q', query)
+      if (from) qs.set('from', from)
+      if (to) qs.set('to', to)
+      setItems(await api<Reservation[]>(`/reservations/admin/all?${qs.toString()}`))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status])
+
+  const updateStatus = async (id: string, newStatus: string) => {
+    await api(`/reservations/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: newStatus }) })
+    if (view) setView({ ...view, status: newStatus as Reservation['status'] })
+    await load()
+  }
+
+  const remove = async (id: string) => {
+    await api(`/reservations/${id}`, { method: 'DELETE' })
+    setView(null)
+    await load()
+  }
+
+  const exportCsv = () => {
+    const header = ['Código', 'Data', 'Hora', 'Adultos', 'Crianças', 'Tipo', 'Nome', 'Email', 'Telefone', 'Estado', 'Valor']
+    const rows = items.map((r) =>
+      [
+        r.code,
+        formatDateShort(r.date),
+        r.time,
+        r.adults,
+        r.children,
+        r.visitType,
+        r.name,
+        r.email,
+        r.phone,
+        STATUS_LABELS[r.status] || r.status,
+        r.totalPrice,
+      ]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(';')
+    )
+    const csv = [header.join(';'), ...rows].join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `reservas-mhm-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const totals = useMemo(
+    () => ({
+      total: items.length,
+      receita: items.filter((r) => r.status === 'CONFIRMED').reduce((s, r) => s + r.totalPrice, 0),
+      visitantes: items.reduce((s, r) => s + r.totalVisitors, 0),
+    }),
+    [items]
+  )
+
+  if (loading && items.length === 0) return <Spinner />
+
+  return (
+    <div>
+      <PageHead
+        title="Gestão de Reservas"
+        subtitle={`${totals.total} reservas · ${totals.visitantes} visitantes · Receita confirmada: ${formatMoney(totals.receita)}`}
+        action={
+          <button onClick={exportCsv} className="btn-outline !py-2.5">
+            <Download className="h-4 w-4" /> Exportar CSV
+          </button>
+        }
+      />
+
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <div className="relative max-w-xs">
+          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-forest-400" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && load()} placeholder="Código, nome ou email…" className="!pl-10" />
+        </div>
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className="!w-48">
+          {STATUS_OPTIONS.map((s) => (
+            <option key={s} value={s}>{s === 'todos' ? 'Todos os estados' : STATUS_LABELS[s] || s}</option>
+          ))}
+        </select>
+        <label className="flex items-center gap-2 text-xs font-bold text-forest-800">
+          De <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="!w-40" />
+        </label>
+        <label className="flex items-center gap-2 text-xs font-bold text-forest-800">
+          Até <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="!w-40" />
+        </label>
+        <button onClick={load} className="btn-primary !py-2.5 !px-5">Filtrar</button>
+      </div>
+
+      <Table head={['Código', 'Data', 'Visitante', 'Tipo', 'Estado', 'Valor', 'Ações']}>
+        {items.map((r) => (
+          <tr key={r.id} className="hover:bg-forest-50/50">
+            <td className="px-4 py-3 font-mono text-xs font-bold text-forest-700">{r.code}</td>
+            <td className="px-4 py-3 text-forest-800/70">
+              {formatDateShort(r.date)}
+              <span className="ml-1 text-xs text-forest-800/50">{r.time}</span>
+            </td>
+            <td className="px-4 py-3">
+              <div className="font-bold text-forest-900">{r.name}</div>
+              <div className="text-xs text-forest-800/50">
+                {r.adults} adulto(s), {r.children} criança(s)
+              </div>
+            </td>
+            <td className="px-4 py-3 text-forest-800/70">{r.visitType}</td>
+            <td className="px-4 py-3">
+              <span className={`badge ${STATUS_STYLES[r.status]}`}>{STATUS_LABELS[r.status]}</span>
+            </td>
+            <td className="px-4 py-3 font-bold text-forest-900">{formatMoney(r.totalPrice)}</td>
+            <td className="px-4 py-3">
+              <div className="flex items-center gap-1">
+                <button onClick={() => setView(r)} className="rounded-lg px-3 py-2 text-forest-700 hover:bg-forest-100" title="Ver">
+                  <Eye className="h-4 w-4" />
+                </button>
+                {r.status !== 'CONFIRMED' && (
+                  <button
+                    onClick={() => updateStatus(r.id, 'CONFIRMED')}
+                    className="rounded-lg px-3 py-2 text-forest-700 hover:bg-forest-100"
+                    title="Confirmar"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                  </button>
+                )}
+                {r.status !== 'CANCELLED' && (
+                  <button
+                    onClick={() => updateStatus(r.id, 'CANCELLED')}
+                    className="rounded-lg px-3 py-2 text-red-600 hover:bg-red-50"
+                    title="Cancelar"
+                  >
+                    <XCircle className="h-4 w-4" />
+                  </button>
+                )}
+                <ConfirmDelete onConfirm={() => remove(r.id)} />
+              </div>
+            </td>
+          </tr>
+        ))}
+      </Table>
+
+      <Modal open={!!view} onClose={() => setView(null)} title={view?.code || 'Reserva'}>
+        {view && (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                ['Data', formatDateShort(view.date)],
+                ['Horário', view.time],
+                ['Nome', view.name],
+                ['Email', view.email],
+                ['Telefone', view.phone],
+                ['Tipo de visita', view.visitType],
+                ['Adultos', String(view.adults)],
+                ['Crianças', String(view.children)],
+                ['Experiência', view.experience?.title || '—'],
+                ['Valor', formatMoney(view.totalPrice)],
+              ].map(([k, v]) => (
+                <div key={k} className="rounded-xl bg-forest-50 p-3">
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-forest-800/50">{k}</p>
+                  <p className="mt-0.5 text-sm font-semibold text-forest-900">{v}</p>
+                </div>
+              ))}
+            </div>
+            {view.notes && (
+              <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+                <strong>Observações:</strong> {view.notes}
+              </div>
+            )}
+            <div>
+              <label className="field-label">Alterar estado</label>
+              <div className="flex flex-wrap gap-2">
+                {['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED'].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => updateStatus(view.id, s)}
+                    className={`rounded-full px-4 py-2 text-xs font-bold uppercase ${
+                      view.status === s ? 'bg-forest-700 text-white' : 'bg-forest-50 text-forest-700 ring-1 ring-forest-200'
+                    }`}
+                  >
+                    {STATUS_LABELS[s]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  )
+}
