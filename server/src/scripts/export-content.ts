@@ -51,7 +51,7 @@ async function main() {
       ...n,
       date: n.date.toISOString(),
     })),
-    gallery: gallery.map(({ id: _id, createdAt: _ca, ...g }) => g),
+    gallery: gallery.filter((g) => !g.url.startsWith('/uploads/')).map(({ id: _id, createdAt: _ca, ...g }) => g),
     faqs: faqs.map(({ id: _id, ...f }) => f),
     settings,
   }

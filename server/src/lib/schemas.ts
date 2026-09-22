@@ -2,6 +2,9 @@ import { z } from 'zod'
 
 export const emailSchema = z.string().email('Email inválido.').max(160)
 
+const uploadUrl = z.string().url().or(z.string().startsWith('/uploads/').or(z.literal('')))
+const imageField = uploadUrl.optional().nullable()
+
 export const registerSchema = z.object({
   name: z.string().min(2, 'Nome demasiado curto.').max(120),
   email: emailSchema,
@@ -59,14 +62,14 @@ export const animalSchema = z.object({
   behavior: z.string().max(500).optional().nullable(),
   featured: z.boolean().optional(),
   active: z.boolean().optional(),
-  mainImage: z.string().url().or(z.literal('')).optional().nullable(),
+  mainImage: imageField,
 })
 
 export const experienceSchema = z.object({
   title: z.string().min(1).max(160),
   shortDesc: z.string().min(1).max(300),
   description: z.string().optional().nullable(),
-  image: z.string().url().or(z.literal('')).optional().nullable(),
+  image: imageField,
   type: z.enum(['VISITA', 'ALIMENTACAO', 'PASSEIO', 'EDUCACAO', 'FAMILIA', 'EVENTO', 'AVENTURA']),
   duration: z.string().max(60),
   minAge: z.string().max(60),
@@ -83,7 +86,7 @@ export const eventSchema = z.object({
   time: z.string().max(60),
   location: z.string().max(200),
   description: z.string().min(1),
-  image: z.string().url().or(z.literal('')).optional().nullable(),
+  image: imageField,
   price: z.coerce.number().min(0).optional().default(0),
   maxParticipants: z.coerce.number().int().positive().optional().nullable(),
   active: z.boolean().optional(),
@@ -131,7 +134,7 @@ export const gallerySchema = z.object({
 export const newsSchema = z.object({
   title: z.string().min(1).max(200),
   content: z.string().min(1),
-  image: z.string().url().or(z.literal('')).optional(),
+  image: imageField,
   date: z.string().optional(),
   author: z.string().min(1).max(120),
   category: z.string().max(120),

@@ -46,12 +46,14 @@ export function Modal({
   title,
   children,
   wide,
+  xl,
 }: {
   open: boolean
   onClose: () => void
   title: string
   children: ReactNode
   wide?: boolean
+  xl?: boolean
 }) {
   useEffect(() => {
     if (!open) return
@@ -71,7 +73,7 @@ export function Modal({
       onClick={onClose}
     >
       <div
-        className={`my-8 w-full ${wide ? 'max-w-3xl' : 'max-w-xl'} rounded-3xl bg-white shadow-2xl`}
+        className={`my-8 w-full ${xl ? 'max-w-5xl' : wide ? 'max-w-3xl' : 'max-w-xl'} rounded-3xl bg-white shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

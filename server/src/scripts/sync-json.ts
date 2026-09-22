@@ -83,9 +83,12 @@ interface ContentFile {
 
 export async function syncContent(content: ContentFile) {
   const animalIds = new Map<string, string>()
+const keepUpload = (existing: string | null | undefined, json: string | null) =>
+  (existing && existing.startsWith('/uploads/') ? existing : json) ?? ''
 
   // ---- Settings ----
   for (const [key, value] of Object.entries(content.settings || {})) {
+    if (key === 'branding') continue
     const json = JSON.stringify(value ?? {})
     const existing = await prisma.setting.findUnique({ where: { key } })
     if (existing) await prisma.setting.update({ where: { key }, data: { value: json } })
@@ -118,6 +121,7 @@ export async function syncContent(content: ContentFile) {
         where: { id: found.id },
         data: {
           ...data,
+          mainImage: keepUpload(found.mainImage, data.mainImage),
           images: {
             deleteMany: {},
             create: (a.images || []).map((img, i) => ({
@@ -164,7 +168,11 @@ export async function syncContent(content: ContentFile) {
       animalId,
     }
     const found = await prisma.experience.findUnique({ where: { slug: e.slug } })
-    if (found) await prisma.experience.update({ where: { id: found.id }, data })
+    if (found)
+      await prisma.experience.update({
+        where: { id: found.id },
+        data: { ...data, image: keepUpload(found.image, data.image) },
+      })
     else await prisma.experience.create({ data })
   }
 
@@ -184,7 +192,11 @@ export async function syncContent(content: ContentFile) {
       featured: ev.featured ?? false,
     }
     const found = await prisma.event.findUnique({ where: { slug: ev.slug } })
-    if (found) await prisma.event.update({ where: { id: found.id }, data })
+    if (found)
+      await prisma.event.update({
+        where: { id: found.id },
+        data: { ...data, image: keepUpload(found.image, data.image) },
+      })
     else await prisma.event.create({ data })
   }
 
@@ -202,24 +214,31 @@ export async function syncContent(content: ContentFile) {
       featured: n.featured ?? false,
     }
     const found = await prisma.news.findUnique({ where: { slug: n.slug } })
-    if (found) await prisma.news.update({ where: { id: found.id }, data })
+    if (found)
+      await prisma.news.update({
+        where: { id: found.id },
+        data: { ...data, image: keepUpload(found.image || null, data.image) },
+      })
     else await prisma.news.create({ data })
   }
 
-  // ---- Galeria e FAQ: espelho total ----
-  await prisma.galleryItem.deleteMany()
-  for (const g of content.gallery) {
-    await prisma.galleryItem.create({
-      data: {
-        title: g.title ?? null,
-        category: g.category ?? 'animais',
-        type: g.type ?? 'IMAGE',
-        url: g.url,
-        videoUrl: g.videoUrl ?? null,
-        active: g.active ?? true,
-      },
-    })
-  }
+// ---- Galeria e FAQ: espelho total, preservando o que foi carregado no admin (/uploads/) ----
+await prisma.galleryItem.deleteMany({
+  where: { url: { not: { startsWith: '/uploads/' } } },
+})
+for (const g of content.gallery) {
+  if (g.url.startsWith('/uploads/')) continue
+  await prisma.galleryItem.create({
+    data: {
+      title: g.title ?? null,
+      category: g.category ?? 'animais',
+      type: g.type ?? 'IMAGE',
+      url: g.url,
+      videoUrl: g.videoUrl ?? null,
+      active: g.active ?? true,
+    },
+  })
+}
 
   await prisma.faq.deleteMany()
   for (const f of content.faqs) {

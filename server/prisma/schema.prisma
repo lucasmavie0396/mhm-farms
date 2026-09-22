@@ -160,6 +160,7 @@ model Reservation {
   experience   Experience?       @relation(fields: [experienceId], references: [id])
   status       ReservationStatus @default(PENDING)
   totalPrice   Float             @default(0)
+  breakdown    Json?
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 }

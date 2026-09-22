@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Pencil, ToggleLeft, ToggleRight } from 'lucide-react'
-import { api } from '../../lib/api'
+import { Loader2, Pencil, ToggleLeft, ToggleRight, Upload } from 'lucide-react'
+import { api, uploadFile } from '../../lib/api'
 import { usePageMeta } from '../../lib/seo'
 import { formatDateShort, formatMoney } from '../../lib/settings'
 import { AddButton, ConfirmDelete, Modal, Notice, PageHead, Table, Spinner } from '../../components/admin'
@@ -28,6 +28,7 @@ export default function AdminEvents() {
   const [form, setForm] = useState({ ...EMPTY })
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -71,6 +72,22 @@ export default function AdminEvents() {
     })
     setError('')
     setOpen(true)
+  }
+
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setError('')
+    try {
+      const url = await uploadFile(file)
+      setForm({ ...form, image: url })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao enviar a imagem.')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
   }
 
   const save = async (e: React.FormEvent) => {
@@ -182,9 +199,34 @@ export default function AdminEvents() {
               <label className="field-label">Máx. participantes</label>
               <input type="number" min={1} value={form.maxParticipants} onChange={update('maxParticipants')} />
             </div>
-            <div>
-              <label className="field-label">URL da Imagem</label>
-              <input value={form.image} onChange={update('image')} placeholder="https://…" />
+            <div className="sm:col-span-2">
+              <label className="field-label">Imagem do evento</label>
+              <div className="flex items-start gap-3 rounded-2xl border border-forest-100 p-3">
+                <div className="h-20 w-28 shrink-0 overflow-hidden rounded-xl bg-forest-50 ring-1 ring-forest-100">
+                  {form.image ? (
+                    <img src={form.image} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-[10px] font-bold uppercase tracking-wider text-forest-800/40">
+                      Sem imagem
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-forest-300 bg-forest-50 px-4 py-2.5 text-sm font-semibold text-forest-800 hover:bg-forest-100">
+                    {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    {uploading ? 'A enviar…' : 'Carregar do computador'}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif,image/avif,image/bmp"
+                      className="hidden"
+                      onChange={onFile}
+                      disabled={uploading}
+                    />
+                  </label>
+                  <span className="text-[11px] text-forest-800/50">ou use um URL externo</span>
+                  <input className="!mt-0" value={form.image} onChange={update('image')} placeholder="https://…" />
+                </div>
+              </div>
             </div>
             <div className="sm:col-span-2">
               <label className="field-label">Descrição *</label>

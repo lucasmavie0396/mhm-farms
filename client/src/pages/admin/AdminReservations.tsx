@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Download, Eye, Search, XCircle } from 'lucide-react'
-import { api } from '../../lib/api'
+import { CheckCircle2, Download, Eye, FileDown, Printer, Search, XCircle } from 'lucide-react'
+import { api, getToken } from '../../lib/api'
 import { usePageMeta } from '../../lib/seo'
 import { formatDateShort, formatMoney } from '../../lib/settings'
 import { STATUS_LABELS, STATUS_STYLES } from '../../components/ui'
@@ -48,6 +48,44 @@ export default function AdminReservations() {
     await api(`/reservations/${id}`, { method: 'DELETE' })
     setView(null)
     await load()
+  }
+
+  const [pdfBusy, setPdfBusy] = useState<string | null>(null)
+  const [preview, setPreview] = useState<{ url: string; code: string } | null>(null)
+
+  const openPdf = async (id: string, code: string) => {
+    if (pdfBusy) return
+    setPdfBusy(id)
+    try {
+      const token = getToken()
+      const res = await fetch(`/api/reservations/${id}/pdf`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Erro ao gerar o PDF.')
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      setPreview({ url, code })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao gerar o PDF.')
+    } finally {
+      setPdfBusy(null)
+    }
+  }
+
+  const saveFromPreview = () => {
+    if (!preview) return
+    const a = document.createElement('a')
+    a.href = preview.url
+    a.download = `reserva-${preview.code}.pdf`
+    a.click()
+  }
+
+  const closePreview = () => {
+    if (preview) URL.revokeObjectURL(preview.url)
+    setPreview(null)
   }
 
   const exportCsv = () => {
@@ -145,6 +183,14 @@ export default function AdminReservations() {
                 <button onClick={() => setView(r)} className="rounded-lg px-3 py-2 text-forest-700 hover:bg-forest-100" title="Ver">
                   <Eye className="h-4 w-4" />
                 </button>
+                <button
+                  onClick={() => openPdf(r.id, r.code)}
+                  disabled={pdfBusy === r.id}
+                  className="rounded-lg px-3 py-2 text-forest-700 hover:bg-forest-100"
+                  title="Reimprimir PDF"
+                >
+                  {pdfBusy === r.id ? <FileDown className="h-4 w-4 animate-pulse" /> : <Printer className="h-4 w-4" />}
+                </button>
                 {r.status !== 'CONFIRMED' && (
                   <button
                     onClick={() => updateStatus(r.id, 'CONFIRMED')}
@@ -192,26 +238,81 @@ export default function AdminReservations() {
                 </div>
               ))}
             </div>
+            {view.breakdown && view.breakdown.length > 0 && (
+              <div className="rounded-xl bg-white p-3 ring-1 ring-forest-100">
+                <p className="text-[10px] font-extrabold uppercase tracking-wider text-forest-800/50">Serviços</p>
+                <div className="mt-2 space-y-1">
+                  {view.breakdown.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-sm">
+                      <span className="font-medium text-forest-900">
+                        {item.service}
+                        <span className="ml-1 text-xs text-forest-700/60">
+                          ×{item.qty} · {formatMoney(item.unit)}
+                        </span>
+                      </span>
+                      <span className="font-semibold text-forest-900">{formatMoney(item.total)}</span>
+                    </div>
+                  ))}
+                  <div className="mt-2 flex items-center justify-between border-t border-forest-100 pt-2">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-forest-800/50">Total a pagar</span>
+                    <span className="font-bold text-forest-900">{formatMoney(view.totalPrice)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
             {view.notes && (
               <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
                 <strong>Observações:</strong> {view.notes}
               </div>
             )}
-            <div>
-              <label className="field-label">Alterar estado</label>
-              <div className="flex flex-wrap gap-2">
-                {['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED'].map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => updateStatus(view.id, s)}
-                    className={`rounded-full px-4 py-2 text-xs font-bold uppercase ${
-                      view.status === s ? 'bg-forest-700 text-white' : 'bg-forest-50 text-forest-700 ring-1 ring-forest-200'
-                    }`}
-                  >
-                    {STATUS_LABELS[s]}
-                  </button>
-                ))}
-              </div>
+            <div className="">
+                  <label className="field-label">Alterar estado</label>
+                  <div className="flex flex-wrap gap-2">
+                    {['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED'].map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => updateStatus(view.id, s)}
+                        className={`rounded-full px-4 py-2 text-xs font-bold uppercase ${
+                          view.status === s ? 'bg-forest-700 text-white' : 'bg-forest-50 text-forest-700 ring-1 ring-forest-200'
+                        }`}
+                      >
+                        {STATUS_LABELS[s]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  onClick={() => openPdf(view.id, view.code)}
+                  disabled={pdfBusy === view.id}
+                  className="btn-outline !py-2.5"
+                >
+                  {pdfBusy === view.id ? <FileDown className="h-4 w-4 animate-pulse" /> : <Printer className="h-4 w-4" />}
+                  Reimprimir PDF
+                </button>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={!!preview} onClose={closePreview} title={`Pré-visualização · Reserva ${preview?.code || ''}`} xl>
+        {preview && (
+          <div className="-m-6 flex flex-col">
+            <div className="bg-forest-50 px-6 py-4">
+              <p className="text-sm text-forest-800/70">
+                Confirme o documento antes de o guardar. Se estiver tudo certo, escolha{' '}
+                <strong className="text-forest-900">Transferir</strong>.
+              </p>
+            </div>
+            <div className="p-6 pt-4">
+              <iframe src={preview.url} title={`Confirmação ${preview.code}`} className="h-[62vh] w-full rounded-xl border border-forest-100 bg-white" />
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-forest-100 px-6 py-4">
+              <button onClick={closePreview} className="btn-outline !py-2.5">
+                Fechar
+              </button>
+              <button onClick={saveFromPreview} className="btn-primary !py-2.5">
+                <FileDown className="h-4 w-4" />
+                Transferir PDF
+              </button>
             </div>
           </div>
         )}

@@ -1,34 +1,28 @@
 import { Router } from 'express'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { allowRoles, protect } from '../lib/auth'
 import { validate, generateReservationCode, paramId } from '../lib/utils'
 import { reservationSchema, reservationStatusSchema } from '../lib/schemas'
+import { generateAndSaveReservationPdf, generateReservationPdf } from '../lib/pdf'
+import { buildBreakdown } from '../lib/pricing'
 
 const router = Router()
 
-async function computePrice(adults: number, children: number, visitType: string): Promise<number> {
-  const pricesSetting = await prisma.setting.findUnique({ where: { key: 'prices' } })
-  if (!pricesSetting) return 0
-  let prices: { category: string; price: number }[] = []
-  try {
-    prices = JSON.parse(pricesSetting.value)
-  } catch {
-    prices = []
-  }
-  const adultPrice = prices.find((p) => p.category.toLowerCase().includes('adult'))?.price ?? 0
-  const childPrice = prices.find((p) => p.category.toLowerCase().includes('crian'))?.price ?? 0
-  let total = adultPrice * adults + childPrice * children
-  if (visitType.toLowerCase().includes('familiar') || visitType.toLowerCase().includes('família')) {
-    const fam = prices.find((p) => p.category.toLowerCase().includes('famili'))?.price
-    if (fam) total = fam
-  }
-  return total
+async function reservationBreakdown(adults: number, children: number, visitType: string, experienceId?: string | null) {
+  const experience = experienceId
+    ? await prisma.experience.findUnique({
+        where: { id: experienceId },
+        select: { title: true, price: true },
+      })
+    : null
+  return buildBreakdown({ adults, children, visitType, experience })
 }
 
 router.post('/', validate(reservationSchema), async (req, res) => {
   const { date, time, adults, children, visitType, experienceId, name, phone, email, notes } = req.body
   const totalVisitors = adults + children
-  const totalPrice = await computePrice(adults, children, visitType)
+  const { items, total } = await reservationBreakdown(adults, children, visitType, experienceId)
   const code = await generateReservationCode()
   const reservation = await prisma.reservation.create({
     data: {
@@ -44,7 +38,8 @@ router.post('/', validate(reservationSchema), async (req, res) => {
       phone,
       email: email.toLowerCase(),
       notes: notes || null,
-      totalPrice,
+      totalPrice: total,
+      breakdown: items as unknown as Prisma.InputJsonValue,
     },
     include: { experience: true },
   })
@@ -99,13 +94,43 @@ router.patch('/:id/status', protect, allowRoles('ADMIN', 'MANAGER'), validate(re
     data: { status: req.body.status },
     include: { experience: true },
   })
+  if (req.body.status === 'CONFIRMED') {
+    try {
+      await generateAndSaveReservationPdf(reservation)
+    } catch (err) {
+      console.error('Erro ao gerar PDF da reserva:', err)
+    }
+  }
   res.json(reservation)
+})
+
+router.get('/:id/pdf', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res) => {
+  const reservation = await prisma.reservation.findUnique({
+    where: { id: paramId(req) },
+    include: { experience: true },
+  })
+  if (!reservation) {
+    res.status(404).json({ error: 'Reserva não encontrada.' })
+    return
+  }
+  try {
+    const buf = await generateReservationPdf(reservation)
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="reserva-${reservation.code}.pdf"`
+    )
+    res.send(buf)
+  } catch (err) {
+    console.error('Erro ao gerar PDF:', err)
+    res.status(500).json({ error: 'Erro ao gerar o PDF da reserva.' })
+  }
 })
 
 router.put('/:id', protect, allowRoles('ADMIN', 'MANAGER'), validate(reservationSchema), async (req, res) => {
   const { date, time, adults, children, visitType, experienceId, name, phone, email, notes } = req.body
   const totalVisitors = adults + children
-  const totalPrice = await computePrice(adults, children, visitType)
+  const { items, total } = await reservationBreakdown(adults, children, visitType, experienceId)
   const reservation = await prisma.reservation.update({
     where: { id: paramId(req) },
     data: {
@@ -120,7 +145,8 @@ router.put('/:id', protect, allowRoles('ADMIN', 'MANAGER'), validate(reservation
       phone,
       email: email.toLowerCase(),
       notes: notes || null,
-      totalPrice,
+      totalPrice: total,
+      breakdown: items as unknown as Prisma.InputJsonValue,
     },
     include: { experience: true },
   })

@@ -85,6 +85,7 @@ export interface Reservation {
   experience?: Experience | null
   status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED'
   totalPrice: number
+  breakdown?: { service: string; qty: number; unit: number; total: number }[]
   createdAt: string
 }
 
