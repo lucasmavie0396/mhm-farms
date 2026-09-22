@@ -91,7 +91,7 @@ export default function Gallery() {
                       <PlayCircle className="h-12 w-12 text-white drop-shadow-lg" />
                     </span>
                   )}
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-forest-950/80 to-transparent p-3 text-left opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-forest-950/80 to-transparent p-3 text-left">
                     <p className="flex items-center gap-1.5 text-xs font-bold text-white">
                       <ImageIcon className="h-3.5 w-3.5" /> {item.title || item.category}
                     </p>
