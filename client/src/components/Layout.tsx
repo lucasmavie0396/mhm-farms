@@ -93,14 +93,12 @@ function Logo() {
           MH
         </span>
       )}
-      {!logo && (
-        <span className="leading-tight">
-          <span className="block font-display text-xl font-bold text-white">MHM Farms</span>
-          <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gold-500">
-            {settings.home?.heroSubtitle || 'Onde a Natureza Ganha Vida'}
-          </span>
+      <span className="leading-tight">
+        <span className="block font-display text-xl font-bold text-white">MHM Farms</span>
+        <span className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gold-500">
+          {settings.home?.heroSubtitle || 'Onde a Natureza Ganha Vida'}
         </span>
-      )}
+      </span>
     </Link>
   )
 }
