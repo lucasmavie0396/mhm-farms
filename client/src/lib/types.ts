@@ -204,21 +204,54 @@ export interface PublicSettings {
 }
 
 export interface DashboardData {
-  visitors: { today: number; week: number; month: number; overall: number }
+  range: { from: string; to: string }
+  visitors: { today: number; week: number; month: number; period: number; overall: number; ticketVisitors: number }
   reservations: {
-    today: number
+    period: number
     pending: number
     confirmed: number
     cancelled: number
-    revenueMonth: number
-    revenueConfirmed: number
+    revenue: number
     revenuePending: number
   }
+  sales: { period: number; revenue: number }
   content: { animals: number; events: number; messages: number }
   charts: {
     byDay: { date: string; visitors: number }[]
     topExperiences: { id: string | null; name: string; count: number }[]
   }
+  recent: Reservation[]
+}
+
+export type PaymentMethod = 'CASH' | 'MPESA' | 'EMOLA' | 'CARD' | 'OTHER'
+
+export const PAYMENT_METHODS: Record<PaymentMethod, string> = {
+  CASH: 'Dinheiro',
+  MPESA: 'M-Pesa',
+  EMOLA: 'e-Mola',
+  CARD: 'Cartão / Multicaixa',
+  OTHER: 'Outro',
+}
+
+export interface TicketSaleItem {
+  service: string
+  qty: number
+  unit: number
+  total: number
+}
+
+export interface TicketSale {
+  id: string
+  code: string
+  date: string
+  items: TicketSaleItem[]
+  totalPrice: number
+  totalVisitors: number
+  paymentMethod: PaymentMethod
+  customerName?: string | null
+  status: string
+  seller?: { id: string; name: string } | null
+  createdAt: string
 }
 
 export interface Feedback {
@@ -240,10 +273,14 @@ export interface RevenueReport {
     completed: number
     cancelled: number
     pending: number
+    ticketCount: number
+    ticketRevenue: number
+    ticketVisitors: number
   }
-  byDay: { name: string; count: number; revenue: number; visitors: number }[]
+  byDay: { name: string; count: number; revenue: number; visitors: number; tickets?: number; ticketRevenue?: number }[]
   byStatus: { name: string; count: number; revenue: number; visitors: number }[]
   byService: { name: string; qty: number; revenue: number }[]
+  ticketByMethod: { name: string; count: number; revenue: number }[]
   reservations: {
     id: string
     code: string

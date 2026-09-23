@@ -11,11 +11,11 @@ router.post('/', validate(contactSchema), async (req, res) => {
   res.status(201).json(message)
 })
 
-router.get('/admin/all', protect, allowRoles('ADMIN', 'MANAGER', 'STAFF'), async (_req, res) => {
+router.get('/admin/all', protect, allowRoles('ADMIN', 'MANAGER'), async (_req, res) => {
   res.json(await prisma.contactMessage.findMany({ orderBy: { createdAt: 'desc' } }))
 })
 
-router.patch('/:id/status', protect, allowRoles('ADMIN', 'MANAGER', 'STAFF'), async (req, res) => {
+router.patch('/:id/status', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res) => {
   const status = String(req.body.status || 'READ')
   if (!['NEW', 'READ', 'ARCHIVED'].includes(status)) {
     res.status(400).json({ error: 'Estado inválido.' })

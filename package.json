@@ -19,6 +19,8 @@
     "db:seed": "npm run db:seed -w server",
     "db:setup": "npm run db:generate -w server && npm run db:migrate -w server && npm run db:seed -w server",
     "db:reset": "npm run db:reset -w server",
+    "db:dump": "node server/scripts/db-backup.mjs",
+    "db:restore": "node server/scripts/db-restore.mjs",
     "db:studio": "npm run db:studio -w server",
     "json:export": "npm run export:json -w server",
     "db:sync": "npm run sync:json -w server",

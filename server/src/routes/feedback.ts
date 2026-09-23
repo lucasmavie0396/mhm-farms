@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
   res.json(items)
 })
 
-router.get('/admin/all', protect, allowRoles('ADMIN', 'MANAGER', 'STAFF'), async (_req, res) => {
+router.get('/admin/all', protect, allowRoles('ADMIN', 'MANAGER'), async (_req, res) => {
   res.json(await prisma.feedback.findMany({ orderBy: { createdAt: 'desc' } }))
 })
 

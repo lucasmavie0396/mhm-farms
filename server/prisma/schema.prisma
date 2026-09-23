@@ -61,6 +61,7 @@ model User {
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  sales        TicketSale[]
 }
 
 model Animal {
@@ -240,4 +241,19 @@ model Feedback {
   comment   String    @db.Text
   active    Boolean   @default(true)
   createdAt DateTime  @default(now())
+}
+
+model TicketSale {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  date          DateTime  @default(now())
+  items         Json
+  totalPrice    Float
+  totalVisitors Int       @default(0)
+  paymentMethod String
+  customerName  String?
+  status        String    @default("PAID")
+  sellerId      String?
+  seller        User?     @relation(fields: [sellerId], references: [id], onDelete: SetNull)
+  createdAt     DateTime  @default(now())
 }

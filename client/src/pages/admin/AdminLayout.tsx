@@ -11,6 +11,7 @@ import {
   MessageSquare,
   PawPrint,
   Settings,
+  ShoppingCart,
   Sparkles,
   Ticket,
   Users,
@@ -20,6 +21,7 @@ import { useAuth, ROLE_LABELS } from '../../lib/settings'
 const NAV = [
   { to: '/admin', label: 'Dashboard', Icon: LayoutDashboard, end: true },
   { to: '/admin/reservas', label: 'Reservas', Icon: Ticket },
+  { to: '/admin/venda-entradas', label: 'Venda de entradas', Icon: ShoppingCart },
   { to: '/admin/relatorios', label: 'Relatórios', Icon: BarChart3 },
   { to: '/admin/animais', label: 'Animais', Icon: PawPrint },
   { to: '/admin/experiencias', label: 'Experiências', Icon: Sparkles },
@@ -36,6 +38,7 @@ const NAV = [
 export default function AdminLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const nav = user?.role === 'STAFF' ? NAV.filter((n) => n.to === '/admin/venda-entradas') : NAV
 
   return (
     <div className="flex min-h-screen bg-forest-50/60">
@@ -52,7 +55,7 @@ export default function AdminLayout() {
           </span>
         </Link>
         <nav className="flex-1 space-y-0.5 px-3 py-2">
-          {NAV.map(({ to, label, Icon, end }) => (
+          {nav.map(({ to, label, Icon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -118,7 +121,7 @@ export default function AdminLayout() {
         </main>
 
         <nav className="no-scrollbar sticky bottom-0 z-30 flex gap-1 overflow-x-auto bg-forest-950 p-2 lg:hidden">
-          {NAV.map(({ to, label, Icon, end }) => (
+          {nav.map(({ to, label, Icon, end }) => (
             <NavLink
               key={to}
               to={to}

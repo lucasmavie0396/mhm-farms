@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   CalendarCheck,
   CalendarDays,
   Coins,
   MessageSquare,
   PawPrint,
+  Repeat,
+  ShoppingCart,
+  Ticket,
   TrendingUp,
   Users,
   XCircle,
@@ -24,46 +27,89 @@ import {
 } from 'recharts'
 import { api } from '../../lib/api'
 import { usePageMeta } from '../../lib/seo'
-import { formatMoney } from '../../lib/settings'
-import { PageHead, Spinner } from '../../components/admin'
-import type { DashboardData, Reservation } from '../../lib/types'
+import { formatDateShort, formatMoney } from '../../lib/settings'
+import { PageHead, Spinner, Notice } from '../../components/admin'
+import type { DashboardData } from '../../lib/types'
 
 const PIE_COLORS = ['#1f783c', '#e0a526', '#5c8a3a', '#c68a12', '#134022', '#86cd94']
 
+function iso(d: Date) {
+  return d.toISOString().slice(0, 10)
+}
+
+function monthRange() {
+  const now = new Date()
+  const first = new Date(now.getFullYear(), now.getMonth(), 1)
+  return { from: iso(first), to: iso(now) }
+}
+
 export default function AdminDashoboard() {
   usePageMeta('Dashboard')
+  const [filters, setFilters] = useState(monthRange())
   const [data, setData] = useState<DashboardData | null>(null)
-  const [today, setToday] = useState<Reservation[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const load = useCallback(async (f = filters) => {
+    setLoading(true)
+    setError('')
+    try {
+      const q = new URLSearchParams()
+      if (f.from) q.set('from', f.from)
+      if (f.to) q.set('to', f.to)
+      setData(await api<DashboardData>(`/dashboard?${q}`))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar o dashboard.')
+    } finally {
+      setLoading(false)
+    }
+  }, [filters])
 
   useEffect(() => {
-    Promise.all([
-      api<DashboardData>('/dashboard'),
-      api<Reservation[]>('/reservations/admin/all'),
-    ])
-      .then(([d, r]) => {
-        setData(d)
-        const todayStr = new Date().toDateString()
-        setToday(
-          r.filter((res) => new Date(res.date).toDateString() === todayStr).slice(0, 6)
-        )
-      })
-      .finally(() => setLoading(false))
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  if (loading) return <Spinner />
+  const applyRange = (from: string, to: string) => {
+    const f = { from, to }
+    setFilters(f)
+    load(f)
+  }
+
+  const quickRanges = [
+    { label: 'Hoje', range: () => { const d = new Date(); return { from: iso(d), to: iso(d) } } },
+    { label: '7 dias', range: () => { const now = new Date(); const d = new Date(now.getTime() - 6 * 86400000); return { from: iso(d), to: iso(now) } } },
+    { label: 'Este mês', range: monthRange },
+    { label: '30 dias', range: () => { const now = new Date(); const d = new Date(now.getTime() - 29 * 86400000); return { from: iso(d), to: iso(now) } } },
+    { label: 'Tudo', range: () => ({ from: '', to: '' }) },
+  ]
+
+  if (loading && !data) return <Spinner />
+
+  if (error && !data) {
+    return (
+      <div>
+        <PageHead title="Dashboard" subtitle="Visão geral do desempenho da MHM Farms." />
+        <Notice kind="error">{error}</Notice>
+      </div>
+    )
+  }
 
   const stats = [
-    { label: 'Visitantes hoje', value: data?.visitors.today ?? 0, Icon: Users },
-    { label: 'Esta semana', value: data?.visitors.week ?? 0, Icon: TrendingUp },
+    { label: 'Visitantes (período)', value: data?.visitors.period ?? 0, Icon: Users },
+    { label: 'Visitantes hoje', value: data?.visitors.today ?? 0, Icon: TrendingUp },
     { label: 'Este mês', value: data?.visitors.month ?? 0, Icon: CalendarDays },
     { label: 'Visitantes totais', value: data?.visitors.overall ?? 0, Icon: Users },
-    { label: 'Reservas hoje', value: data?.reservations.today ?? 0, Icon: CalendarCheck },
+    { label: 'Reservas (período)', value: data?.reservations.period ?? 0, Icon: CalendarCheck },
     { label: 'Pendentes', value: data?.reservations.pending ?? 0, Icon: MessageSquare },
     { label: 'Confirmadas', value: data?.reservations.confirmed ?? 0, Icon: CheckIcon },
     { label: 'Canceladas', value: data?.reservations.cancelled ?? 0, Icon: XCircle },
-    { label: 'Receita (mês)', value: formatMoney(data?.reservations.revenueMonth ?? 0), Icon: Coins },
+    { label: 'Receita (período)', value: formatMoney(data?.reservations.revenue ?? 0), Icon: Coins },
+    { label: 'Vendas de entradas', value: data?.sales.period ?? 0, Icon: ShoppingCart },
+    { label: 'Receita (entradas)', value: formatMoney(data?.sales.revenue ?? 0), Icon: Ticket },
+    { label: 'A receber (pendentes)', value: formatMoney(data?.reservations.revenuePending ?? 0), Icon: Repeat },
     { label: 'Animais', value: data?.content.animals ?? 0, Icon: PawPrint },
+    { label: 'Mensagens novas', value: data?.content.messages ?? 0, Icon: MessageSquare },
   ]
 
   const byDay = (data?.charts.byDay || []).map((d) => ({
@@ -75,6 +121,11 @@ export default function AdminDashoboard() {
     value: e.count,
   }))
 
+  const periodLabel =
+    data?.range.from || data?.range.to
+      ? ` (${data.range.from || '…'} → ${data.range.to || '…'})`
+      : ''
+
   return (
     <div>
       <PageHead
@@ -82,7 +133,50 @@ export default function AdminDashoboard() {
         subtitle="Visão geral do desempenho da MHM Farms."
       />
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+      <div className="flex flex-wrap items-end gap-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-forest-100">
+        <div>
+          <label className="field-label">De</label>
+          <input
+            type="date"
+            value={filters.from}
+            onChange={(e) => setFilters({ ...filters, from: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="field-label">Até</label>
+          <input
+            type="date"
+            value={filters.to}
+            onChange={(e) => setFilters({ ...filters, to: e.target.value })}
+          />
+        </div>
+        <button
+          onClick={() => load()}
+          disabled={loading}
+          className="btn-primary !py-2.5"
+        >
+          {loading ? 'A filtrar…' : 'Filtrar'}
+        </button>
+        <div className="flex flex-wrap gap-2">
+          {quickRanges.map((q) => (
+            <button
+              key={q.label}
+              onClick={() => applyRange(q.range().from, q.range().to)}
+              className="btn-outline !px-3 !py-2 !text-xs"
+            >
+              {q.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {error && (
+        <div className="mt-4">
+          <Notice kind="error">{error}</Notice>
+        </div>
+      )}
+
+      <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
         {stats.map(({ label, value, Icon }) => (
           <div key={label} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-forest-100">
             <div className="flex items-center justify-between">
@@ -96,9 +190,9 @@ export default function AdminDashoboard() {
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-forest-100">
-          <h3 className="mb-4 font-display font-bold text-forest-900">Visitantes por dia (mês atual)</h3>
+          <h3 className="mb-4 font-display font-bold text-forest-900">Visitantes por dia{periodLabel}</h3>
           {byDay.length === 0 ? (
-            <p className="py-10 text-center text-sm text-forest-800/50">Sem dados este mês.</p>
+            <p className="py-10 text-center text-sm text-forest-800/50">Sem dados no período.</p>
           ) : (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={byDay}>
@@ -113,9 +207,9 @@ export default function AdminDashoboard() {
         </div>
 
         <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-forest-100">
-          <h3 className="mb-4 font-display font-bold text-forest-900">Atividades mais reservadas</h3>
+          <h3 className="mb-4 font-display font-bold text-forest-900">Atividades mais reservadas{periodLabel}</h3>
           {topExp.length === 0 ? (
-            <p className="py-10 text-center text-sm text-forest-800/50">Sem reservas de experiências.</p>
+            <p className="py-10 text-center text-sm text-forest-800/50">Sem reservas de experiências no período.</p>
           ) : (
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
@@ -133,12 +227,12 @@ export default function AdminDashoboard() {
       </div>
 
       <div className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-forest-100">
-        <h3 className="mb-4 font-display font-bold text-forest-900">Reservas de hoje</h3>
-        {today.length === 0 ? (
-          <p className="py-8 text-center text-sm text-forest-800/50">Sem reservas para hoje.</p>
+        <h3 className="mb-4 font-display font-bold text-forest-900">Reservas recentes{periodLabel}</h3>
+        {!data || data.recent.length === 0 ? (
+          <p className="py-8 text-center text-sm text-forest-800/50">Sem reservas no período.</p>
         ) : (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {today.map((r) => (
+            {data.recent.map((r) => (
               <div key={r.id} className="rounded-2xl bg-forest-50 p-4">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs font-bold text-forest-700">{r.code}</span>
@@ -146,7 +240,7 @@ export default function AdminDashoboard() {
                 </div>
                 <p className="mt-1.5 font-semibold text-forest-900">{r.name}</p>
                 <p className="text-xs text-forest-800/60">
-                  {r.adults} adulto(s) · {r.children} criança(s) · {r.visitType}
+                  {formatDateShort(r.date)} · {r.adults} adulto(s) · {r.children} criança(s) · {r.visitType}
                 </p>
               </div>
             ))}

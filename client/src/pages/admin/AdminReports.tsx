@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Coins, Download, ReceiptText, Repeat, Users, XCircle } from 'lucide-react'
+import { Coins, Download, ReceiptText, Repeat, ShoppingCart, Ticket, Users, XCircle } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api } from '../../lib/api'
 import { usePageMeta } from '../../lib/seo'
@@ -77,12 +77,19 @@ export default function AdminReports() {
   const stats = [
     { label: 'Receita (confirmadas)', value: formatMoney(report?.summary.revenue ?? 0), Icon: Coins },
     { label: 'A receber (pendentes)', value: formatMoney(report?.summary.pendingValue ?? 0), Icon: Repeat },
+    { label: 'Receita (entradas)', value: formatMoney(report?.summary.ticketRevenue ?? 0), Icon: Ticket },
+    { label: 'Entradas vendidas', value: report?.summary.ticketCount ?? 0, Icon: ShoppingCart },
     { label: 'Reservas', value: report?.summary.reservations ?? 0, Icon: ReceiptText },
     { label: 'Visitantes', value: report?.summary.visitors ?? 0, Icon: Users },
     { label: 'Canceladas', value: report?.summary.cancelled ?? 0, Icon: XCircle },
   ]
 
-  const byDay = (report?.byDay || []).map((d) => ({ name: d.name.slice(5), Receita: d.revenue, Reservas: d.count }))
+  const byDay = (report?.byDay || []).map((d) => ({
+    name: d.name.slice(5),
+    Receita: d.revenue,
+    Reservas: d.count,
+    Entradas: d.tickets || 0,
+  }))
   const byService = (report?.byService || []).slice(0, 10).map((s) => ({
     name: s.name.length > 28 ? s.name.slice(0, 27) + '…' : s.name,
     Receita: s.revenue,
@@ -163,6 +170,7 @@ export default function AdminReports() {
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip formatter={(v) => formatMoney(Number(v))} />
                     <Bar dataKey="Receita" fill="#1f783c" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="Entradas" fill="#e0a526" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -233,6 +241,30 @@ export default function AdminReports() {
               </table>
             </div>
           </div>
+
+          {report.ticketByMethod.length > 0 && (
+            <div className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-forest-100">
+              <h3 className="mb-4 font-display font-bold text-forest-900">Vendas de entradas por forma de pagamento</h3>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-forest-100 text-left text-[10px] font-extrabold uppercase tracking-wider text-forest-800/50">
+                    <th className="pb-2">Forma de pagamento</th>
+                    <th className="pb-2 text-right">Vendas</th>
+                    <th className="pb-2 text-right">Receita (MT)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.ticketByMethod.map((m) => (
+                    <tr key={m.name} className="border-b border-forest-50">
+                      <td className="py-2.5 font-semibold text-forest-900">{m.name}</td>
+                      <td className="py-2.5 text-right text-forest-800/70">{m.count}</td>
+                      <td className="py-2.5 text-right font-bold text-forest-900">{formatMoney(m.revenue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <div className="mt-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-forest-100">
             <div className="mb-4 flex items-center justify-between">

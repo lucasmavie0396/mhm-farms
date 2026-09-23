@@ -85,8 +85,8 @@ function Logo() {
   return (
     <Link to="/" className="flex items-center gap-2.5">
       {logo ? (
-        <span className="grid h-11 w-auto max-w-[180px] place-items-center overflow-hidden">
-          <img src={logo} alt="MHM Farms" className="max-h-11 w-auto object-contain" />
+        <span className="grid h-[72px] w-auto max-w-[270px] place-items-center overflow-hidden">
+          <img src={logo} alt="MHM Farms" className="max-h-12 w-auto object-contain [zoom:1.5]" />
         </span>
       ) : (
         <span className="grid h-11 w-11 place-items-center rounded-2xl bg-forest-700 font-display text-lg font-bold text-gold-500 shadow-md">

@@ -33,3 +33,11 @@ export async function generateReservationCode(): Promise<string> {
   const next = String(count + 1).padStart(6, '0')
   return `${prefix}${next}`
 }
+
+export async function generateTicketSaleCode(): Promise<string> {
+  const year = new Date().getFullYear()
+  const prefix = `MV-${year}-`
+  const count = await prisma.ticketSale.count()
+  const next = String(count + 1).padStart(6, '0')
+  return `${prefix}${next}`
+}

@@ -110,6 +110,20 @@ export const reservationStatusSchema = z.object({
   status: z.enum(['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED']),
 })
 
+export const ticketSaleSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        category: z.string().min(1).max(120),
+        qty: z.coerce.number().int().min(1).max(1000),
+      })
+    )
+    .min(1),
+  paymentMethod: z.enum(['CASH', 'MPESA', 'EMOLA', 'CARD', 'OTHER']),
+  customerName: z.string().max(120).optional().nullable(),
+  experienceId: z.string().optional().nullable(),
+})
+
 export const schoolVisitSchema = z.object({
   schoolName: z.string().min(2).max(160),
   teacherName: z.string().min(2).max(120),

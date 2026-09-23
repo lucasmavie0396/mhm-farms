@@ -40,6 +40,7 @@ import AdminMessages from './pages/admin/AdminMessages'
 import AdminSettings from './pages/admin/AdminSettings'
 import AdminUsers from './pages/admin/AdminUsers'
 import AdminExperiences from './pages/admin/AdminExperiences'
+import AdminTicketSales from './pages/admin/AdminTicketSales'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -52,6 +53,12 @@ function RequireAdmin({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   if (!user || user.role === 'STAFF') return <Navigate to="/admin/login" replace />
   return <>{children}</>
+}
+
+function AdminIndex() {
+  const { user } = useAuth()
+  if (user?.role === 'STAFF') return <Navigate to="/admin/venda-entradas" replace />
+  return <AdminDashboard />
 }
 
 export default function App() {
@@ -93,7 +100,7 @@ export default function App() {
                   </RequireAuth>
                 }
               >
-                <Route index element={<AdminDashboard />} />
+                <Route index element={<AdminIndex />} />
                 <Route
                   path="animais"
                   element={
@@ -110,9 +117,31 @@ export default function App() {
                     </RequireAdmin>
                   }
                 />
-                <Route path="reservas" element={<AdminReservations />} />
-                <Route path="relatorios" element={<AdminReports />} />
-                <Route path="visitas-escolares" element={<AdminSchoolVisits />} />
+                <Route
+                  path="reservas"
+                  element={
+                    <RequireAdmin>
+                      <AdminReservations />
+                    </RequireAdmin>
+                  }
+                />
+                <Route path="venda-entradas" element={<AdminTicketSales />} />
+                <Route
+                  path="relatorios"
+                  element={
+                    <RequireAdmin>
+                      <AdminReports />
+                    </RequireAdmin>
+                  }
+                />
+                <Route
+                  path="visitas-escolares"
+                  element={
+                    <RequireAdmin>
+                      <AdminSchoolVisits />
+                    </RequireAdmin>
+                  }
+                />
                 <Route
                   path="eventos"
                   element={
@@ -145,8 +174,22 @@ export default function App() {
                     </RequireAdmin>
                   }
                 />
-                <Route path="mensagens" element={<AdminMessages />} />
-                <Route path="definicoes" element={<AdminSettings />} />
+                <Route
+                  path="mensagens"
+                  element={
+                    <RequireAdmin>
+                      <AdminMessages />
+                    </RequireAdmin>
+                  }
+                />
+                <Route
+                  path="definicoes"
+                  element={
+                    <RequireAdmin>
+                      <AdminSettings />
+                    </RequireAdmin>
+                  }
+                />
                 <Route
                   path="utilizadores"
                   element={
