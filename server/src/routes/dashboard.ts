@@ -31,7 +31,8 @@ router.get('/', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res) => {
     visitWeek,
     visitMonth,
     totalVisitorsOverall,
-    revenue,
+    reservationPaidRevenue,
+    legacyReservationRevenue,
     revenuePending,
     monthlyStats,
     topExperiences,
@@ -61,8 +62,12 @@ router.get('/', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res) => {
       _sum: { totalVisitors: true },
     }),
     prisma.reservation.aggregate({ _sum: { totalVisitors: true } }),
+    prisma.reservationPayment.aggregate({
+      where: { paidAt: { gte, lte }, reservation: { status: { in: ['CONFIRMED', 'COMPLETED'] } } },
+      _sum: { amount: true },
+    }),
     prisma.reservation.aggregate({
-      where: { ...range, status: { in: ['CONFIRMED', 'COMPLETED'] } },
+      where: { ...range, status: { in: ['CONFIRMED', 'COMPLETED'] }, payments: { none: {} } },
       _sum: { totalPrice: true },
     }),
     prisma.reservation.aggregate({
@@ -121,7 +126,7 @@ router.get('/', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res) => {
       pending: pendingReservations,
       confirmed: confirmedReservations,
       cancelled: cancelledReservations,
-      revenue: (revenue._sum.totalPrice || 0) + (ticketRevenue._sum.totalPrice || 0),
+      revenue: (reservationPaidRevenue._sum.amount || 0) + (legacyReservationRevenue._sum.totalPrice || 0) + (ticketRevenue._sum.totalPrice || 0),
       revenuePending: revenuePending._sum.totalPrice || 0,
     },
     sales: {

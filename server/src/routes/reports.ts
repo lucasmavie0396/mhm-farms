@@ -61,6 +61,7 @@ export type RevenueReportData = {
 async function collectRevenueReport(from: string, to: string, status: string): Promise<RevenueReportData> {
   const where: Record<string, unknown> = {}
   const saleWhere: Record<string, unknown> = { status: 'PAID' }
+  const payWhereUpTo: Record<string, unknown> = {}
   if (from) {
     where.date = { ...(where.date as object), gte: new Date(`${from}T00:00:00.000`) }
     saleWhere.date = { ...(saleWhere.date as object), gte: new Date(`${from}T00:00:00.000`) }
@@ -68,10 +69,11 @@ async function collectRevenueReport(from: string, to: string, status: string): P
   if (to) {
     where.date = { ...(where.date as object), lte: new Date(`${to}T23:59:59.999`) }
     saleWhere.date = { ...(saleWhere.date as object), lte: new Date(`${to}T23:59:59.999`) }
+    payWhereUpTo.paidAt = { lte: new Date(`${to}T23:59:59.999`) }
   }
   if (status !== 'todos') where.status = status
 
-  const [reservations, ticketSales] = await Promise.all([
+  const [reservations, ticketSales, reservationPayments] = await Promise.all([
     prisma.reservation.findMany({
       where,
       include: { experience: true },
@@ -82,24 +84,45 @@ async function collectRevenueReport(from: string, to: string, status: string): P
       include: { reservation: { select: { code: true } } },
       orderBy: { date: 'asc' },
     }),
+    prisma.reservationPayment.findMany({
+      where: payWhereUpTo,
+      include: { reservation: { select: { status: true } } },
+      orderBy: { paidAt: 'asc' },
+    }),
   ])
 
   const byStatus = new Map<string, { count: number; revenue: number; visitors: number }>()
   const byDay = new Map<string, { count: number; revenue: number; visitors: number; tickets?: number; sold?: number; ticketRevenue?: number; ticketVisitors?: number; totalVisitors?: number }>()
   const byService = new Map<string, { qty: number; revenue: number }>()
 
+  // Pagamentos de reservas: agregados até ao fim do período (para não duplicarem
+  // receita de reservas pagas antes), e agrupados por dia para os do período
+  const fromDate = from ? new Date(`${from}T00:00:00.000`) : null
+  const payByDay = new Map<string, number>()
+  const paidUpTo = new Map<string, number>()
+  for (const p of reservationPayments) {
+    if (p.reservation && !MONEY_STATUSES.includes(p.reservation.status)) continue
+    paidUpTo.set(p.reservationId, (paidUpTo.get(p.reservationId) || 0) + p.amount)
+    if (!fromDate || p.paidAt >= fromDate) {
+      const pk = dayKey(p.paidAt)
+      payByDay.set(pk, (payByDay.get(pk) || 0) + p.amount)
+    }
+  }
+  const paidTotalOf = (id: string) => paidUpTo.get(id) ?? 0
+  const neverPaid = (id: string) => !paidUpTo.has(id)
+
   for (const r of reservations) {
     const st = (byStatus.get(r.status) ?? { count: 0, revenue: 0, visitors: 0 })
     st.count += 1
     st.visitors += r.totalVisitors
-    if (MONEY_STATUSES.includes(r.status)) st.revenue += r.totalPrice
+    if (MONEY_STATUSES.includes(r.status)) st.revenue += neverPaid(r.id) ? r.totalPrice : paidTotalOf(r.id)
     byStatus.set(r.status, st)
 
     const key = dayKey(r.date)
     const d = byDay.get(key) ?? { count: 0, revenue: 0, visitors: 0 }
     d.count += 1
     d.visitors += r.totalVisitors
-    if (MONEY_STATUSES.includes(r.status)) d.revenue += r.totalPrice
+    if (MONEY_STATUSES.includes(r.status) && neverPaid(r.id)) d.revenue += r.totalPrice
     byDay.set(key, d)
 
     const breakdown = Array.isArray((r as unknown as { breakdown?: unknown }).breakdown)
@@ -118,6 +141,13 @@ async function collectRevenueReport(from: string, to: string, status: string): P
       if (MONEY_STATUSES.includes(r.status)) s.revenue += r.totalPrice
       byService.set(`Entrada geral (${r.visitType})`, s)
     }
+  }
+
+  // Receita de reservas contabilizada na data em que cada pagamento foi feito
+  for (const [pk, amount] of payByDay) {
+    const d = byDay.get(pk) ?? { count: 0, revenue: 0, visitors: 0 }
+    d.revenue += amount
+    byDay.set(pk, d)
   }
 
   // ---- Vendas de entradas ----
@@ -168,9 +198,10 @@ async function collectRevenueReport(from: string, to: string, status: string): P
   let revenue = 0
   let pendingValue = 0
   let visitors = 0
+  for (const [, amount] of payByDay) revenue += amount
   for (const r of reservations) {
     visitors += r.totalVisitors
-    if (MONEY_STATUSES.includes(r.status)) revenue += r.totalPrice
+    if (MONEY_STATUSES.includes(r.status) && neverPaid(r.id)) revenue += r.totalPrice
     else if (r.status === 'PENDING') pendingValue += r.totalPrice
   }
 
