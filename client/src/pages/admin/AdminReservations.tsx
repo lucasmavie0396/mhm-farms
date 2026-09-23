@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Download, Eye, FileDown, Printer, Search, XCircle } from 'lucide-react'
+import { Banknote, CheckCircle2, Download, Eye, FileDown, Printer, Search, XCircle } from 'lucide-react'
 import { api, getToken } from '../../lib/api'
 import { usePageMeta } from '../../lib/seo'
 import { formatDateShort, formatMoney } from '../../lib/settings'
 import { STATUS_LABELS, STATUS_STYLES } from '../../components/ui'
 import { ConfirmDelete, Modal, PageHead, Spinner, Table } from '../../components/admin'
 import type { Reservation } from '../../lib/types'
+import { PAYMENT_METHODS } from '../../lib/types'
 
 const STATUS_OPTIONS = ['todos', 'PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED']
 
@@ -18,6 +19,16 @@ export default function AdminReservations() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [view, setView] = useState<Reservation | null>(null)
+  const [payForm, setPayForm] = useState({ method: 'CASH', date: new Date().toISOString().slice(0, 10), amount: '' })
+  const [paying, setPaying] = useState(false)
+
+  const paidFor = (r: Reservation) => (r.payments || []).reduce((s, p) => s + p.amount, 0)
+  const remainingFor = (r: Reservation) => Math.round((r.totalPrice - paidFor(r)) * 100) / 100
+
+  const openView = (r: Reservation) => {
+    setView(r)
+    setPayForm((f) => ({ ...f, date: new Date().toISOString().slice(0, 10), amount: '' }))
+  }
 
   const load = async () => {
     setLoading(true)
@@ -48,6 +59,35 @@ export default function AdminReservations() {
     await api(`/reservations/${id}`, { method: 'DELETE' })
     setView(null)
     await load()
+  }
+
+  const registerPayment = async () => {
+    if (!view) return
+    setPaying(true)
+    try {
+      await api(`/reservations/${view.id}/payments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          method: payForm.method,
+          stage: 'FINAL',
+          amount: payForm.amount ? Number(payForm.amount) : undefined,
+          date: payForm.date || undefined,
+        }),
+      })
+      await load()
+      const fresh = items.find((r) => r.id === view.id)
+      if (fresh) setView(fresh)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao registar o pagamento.')
+    } finally {
+      setPaying(false)
+    }
+  }
+
+  const stageLabel = (stage: string) => {
+    if (stage === 'SINAL') return 'Sinal (60%)'
+    if (stage === 'FINAL') return 'Restante (40%)'
+    return stage
   }
 
   const [pdfBusy, setPdfBusy] = useState<string | null>(null)
@@ -172,10 +212,17 @@ export default function AdminReservations() {
             <td className="px-4 py-3">
               <span className={`badge ${STATUS_STYLES[r.status]}`}>{STATUS_LABELS[r.status]}</span>
             </td>
-            <td className="px-4 py-3 font-bold text-forest-900">{formatMoney(r.totalPrice)}</td>
+            <td className="px-4 py-3">
+              <div className="font-bold text-forest-900">{formatMoney(r.totalPrice)}</div>
+              <div className={`text-xs ${remainingFor(r) > 0.001 ? 'text-red-500' : 'text-emerald-600'}`}>
+                {remainingFor(r) > 0.001
+                  ? `Resta ${formatMoney(remainingFor(r))}`
+                  : 'Liquidada'}
+              </div>
+            </td>
             <td className="px-4 py-3">
               <div className="flex items-center gap-1">
-                <button onClick={() => setView(r)} className="rounded-lg px-3 py-2 text-forest-700 hover:bg-forest-100" title="Ver">
+                <button onClick={() => openView(r)} className="rounded-lg px-3 py-2 text-forest-700 hover:bg-forest-100" title="Ver">
                   <Eye className="h-4 w-4" />
                 </button>
                 <button
@@ -258,6 +305,82 @@ export default function AdminReservations() {
             {view.notes && (
               <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
                 <strong>Observações:</strong> {view.notes}
+              </div>
+            )}
+            <div className="rounded-xl bg-white p-3 ring-1 ring-forest-100">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-extrabold uppercase tracking-wider text-forest-800/50">Pagamentos</p>
+                <div className="flex gap-3 text-xs font-bold">
+                  <span className="text-forest-700">Pago: {formatMoney(paidFor(view))}</span>
+                  <span className={remainingFor(view) > 0.001 ? 'text-red-500' : 'text-emerald-600'}>
+                    Restante: {formatMoney(remainingFor(view))}
+                  </span>
+                </div>
+              </div>
+              {view.payments && view.payments.length > 0 ? (
+                <div className="mt-2 space-y-1.5">
+                  {view.payments.map((p) => (
+                    <div key={p.id} className="flex items-center justify-between rounded-lg bg-forest-50 px-3 py-2 text-sm">
+                      <div>
+                        <span className="font-bold text-forest-900">{stageLabel(p.stage)}</span>
+                        <span className="ml-2 text-xs text-forest-700/60">{formatDateShort(p.paidAt)}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-forest-700/70">{PAYMENT_METHODS[p.method] || p.method}</span>
+                        <span className="font-semibold text-forest-900">{formatMoney(p.amount)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-forest-700/60">Sem pagamentos registados.</p>
+              )}
+            </div>
+            {remainingFor(view) > 0.001 && (
+              <div className="rounded-xl bg-forest-50 p-3">
+                <p className="text-[10px] font-extrabold uppercase tracking-wider text-forest-800/50">
+                  Registar pagamento de entrada (restante)
+                </p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                  <div>
+                    <label className="field-label">Método</label>
+                    <select
+                      value={payForm.method}
+                      onChange={(e) => setPayForm({ ...payForm, method: e.target.value })}
+                    >
+                      {Object.entries(PAYMENT_METHODS).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="field-label">Data</label>
+                    <input
+                      type="date"
+                      value={payForm.date}
+                      max={new Date().toISOString().slice(0, 10)}
+                      onChange={(e) => setPayForm({ ...payForm, date: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label">Valor (MT)</label>
+                    <input
+                      type="number"
+                      value={payForm.amount}
+                      placeholder={String(remainingFor(view))}
+                      min={0}
+                      onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={registerPayment}
+                  disabled={paying}
+                  className="btn-primary mt-3 !py-2.5"
+                >
+                  {paying ? <Spinner /> : <Banknote className="h-4 w-4" />}
+                  Registar pagamento
+                </button>
               </div>
             )}
             <div className="">

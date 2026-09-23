@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit'
-import type { Reservation, Experience } from '@prisma/client'
+import type { Reservation, Experience, ReservationPayment } from '@prisma/client'
 import fs from 'node:fs'
 import path from 'node:path'
 import { prisma } from './prisma'
@@ -12,6 +12,14 @@ fs.mkdirSync(reservationsDir, { recursive: true })
 const GREEN = '#1B4332'
 const GOLD = '#D4A017'
 const LIGHT = '#F3F7F2'
+
+const PAYMENT_LABEL: Record<string, string> = {
+  CASH: 'Dinheiro',
+  MPESA: 'M-Pesa',
+  EMOLA: 'e-Mola',
+  CARD: 'Cartão / Multicaixa',
+  OTHER: 'Outro',
+}
 
 export type SettingsBundle = {
   branding?: { logo?: string }
@@ -51,7 +59,13 @@ export function reservationPdfPath(code: string): string {
 
 export function buildReservationPdf(
   reservation: Reservation & { experience?: Experience | null },
-  opts: { logoFile?: string; contacts?: Record<string, string>; tagline?: string; breakdown?: PriceBreakdown }
+  opts: {
+    logoFile?: string
+    contacts?: Record<string, string>
+    tagline?: string
+    breakdown?: PriceBreakdown
+    payments?: ReservationPayment[]
+  }
 ): Promise<Buffer> {
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 0 })
@@ -66,6 +80,13 @@ export function buildReservationPdf(
   const pad = (p: number | string) => String(p).padStart(2, '0')
   const money = (v: number) => `${v.toFixed(2).replace('.', ',')} MT`
   const fmtDate = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`
+  let y = 186
+  const pageBreak = () => {
+    if (y > doc.page.height - 165) {
+      doc.addPage()
+      y = 60
+    }
+  }
 
   // ---- Cabeçalho moderno ----
   doc.rect(0, 0, W, 150).fill(GREEN)
@@ -111,7 +132,6 @@ export function buildReservationPdf(
   ]
 
   const colW = contentW / 2
-  let y = 186
   let i = 0
   for (const [k, v] of rows) {
     const cx = i % 2 === 0 ? M : M + colW
@@ -170,8 +190,63 @@ export function buildReservationPdf(
     y += 32
   }
 
+  // ---- Pagamento: sinal (60%) e restante (40%) ----
+  const payments = opts.payments || []
+  if (payments.length > 0) {
+    const totalPaid = payments.reduce((s, p) => s + p.amount, 0)
+    const remaining = Math.round((reservation.totalPrice - totalPaid) * 100) / 100
+    const firstDate = payments[0].paidAt
+    const lastDate = payments[payments.length - 1].paidAt
+    const sinal = payments.find((p) => p.stage === 'SINAL') || payments[0]
+    const finalPay = payments.find((p) => p.stage !== 'SINAL')
+
+    pageBreak()
+    y += 14
+    doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(10).text('PAGAMENTO', M, y + 2)
+    y += 20
+
+    const halfW = (contentW - 16) / 2
+    const blockH = 72
+    const drawPayBox = (x: number, title: string, subtitle: string, amount: number, accent: boolean) => {
+      doc.rect(x, y, halfW, blockH).fill(accent ? '#FFF7E6' : LIGHT)
+      doc.rect(x, y, 4, blockH).fill(accent ? GOLD : GREEN)
+      doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(8.5).text(title, x + 14, y + 10, { width: halfW - 28 })
+      doc.fillColor('#475569').font('Helvetica').fontSize(9).text(subtitle, x + 14, y + 26, { width: halfW - 28 })
+      doc.fillColor(accent ? GOLD : GREEN).font('Helvetica-Bold').fontSize(14).text(money(amount), x + 14, y + 46, { width: halfW - 28 })
+    }
+    drawPayBox(M, 'SINAL (60%) — PAGO NA RESERVA', `Pago em ${fmtDate(sinal.paidAt)}\nForma: ${PAYMENT_LABEL[sinal.method] || sinal.method}`, sinal.amount, true)
+    drawPayBox(
+      M + halfW + 16,
+      'RESTANTE (40%) — PAGO NA ENTRADA',
+      finalPay
+        ? `Pago em ${fmtDate(finalPay.paidAt)}\nForma: ${PAYMENT_LABEL[finalPay.method] || finalPay.method}`
+        : 'Por pagar no dia da visita',
+      finalPay ? finalPay.amount : remaining,
+      false
+    )
+    y += blockH + 12
+
+    const dateRowH = 34
+    doc.rect(M, y, halfW, dateRowH).fill('#F1F5F9')
+    doc.rect(M + halfW + 16, y, halfW, dateRowH).fill('#F1F5F9')
+    doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(8).text('DATA DO PRIMEIRO PAGAMENTO', M, y + 6, { width: halfW - 20 })
+    doc.fillColor('#1E293B').font('Helvetica').fontSize(11).text(fmtDate(firstDate), M, y + 19, { width: halfW - 20 })
+    doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(8).text('DATA DO ÚLTIMO PAGAMENTO', M + halfW + 16, y + 6, { width: halfW - 20 })
+    doc.fillColor('#1E293B').font('Helvetica').fontSize(11).text(fmtDate(lastDate), M + halfW + 16, y + 19, { width: halfW - 20 })
+    y += dateRowH + 10
+
+    doc.fillColor('#475569').font('Helvetica').fontSize(9).text(
+      `Total pago: ${money(totalPaid)}${remaining > 0.001 ? `  ·  Por liquidar: ${money(remaining)}` : '  ·  Reserva totalmente liquidada'}`,
+      M,
+      y + 4,
+      { width: contentW }
+    )
+    y += 22
+  }
+
   // Observações
   if (reservation.notes) {
+    pageBreak()
     y += 8
     doc.rect(M, y, contentW, 52).fill('#FFF8E1')
     doc.fillColor('#7A5C00').font('Helvetica-Bold').fontSize(9).text('OBSERVAÇÕES', M + 12, y + 6)
@@ -251,11 +326,16 @@ export async function generateReservationPdf(
     })
     breakdown = b.items
   }
+  const payments = await prisma.reservationPayment.findMany({
+    where: { reservationId: reservation.id },
+    orderBy: { paidAt: 'asc' },
+  })
   return buildReservationPdf(reservation, {
     logoFile: logo || undefined,
     contacts: settings.contacts,
     tagline: settings.tagline,
     breakdown,
+    payments,
   })
 }
 

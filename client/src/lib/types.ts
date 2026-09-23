@@ -86,6 +86,16 @@ export interface Reservation {
   status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED'
   totalPrice: number
   breakdown?: { service: string; qty: number; unit: number; total: number }[]
+  payments?: ReservationPayment[]
+  createdAt: string
+}
+
+export interface ReservationPayment {
+  id: string
+  amount: number
+  method: PaymentMethod
+  stage: string
+  paidAt: string
   createdAt: string
 }
 

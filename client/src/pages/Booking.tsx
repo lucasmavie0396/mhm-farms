@@ -51,6 +51,7 @@ export default function Booking() {
     phone: '',
     email: '',
     notes: '',
+    paymentMethod: 'CASH',
   })
 
   useEffect(() => {
@@ -87,6 +88,9 @@ export default function Booking() {
     if (exp) total += exp.price
     return total
   }, [adults, children, form.experienceId, form.visitType, experiences, prices])
+
+  const sinal = Math.round(pricing * 60) / 100
+  const restante = Math.round((pricing - sinal) * 100) / 100
 
   const validateStep1 = () => {
     if (!form.date) return 'Escolha uma data.'
@@ -139,6 +143,7 @@ export default function Booking() {
             phone: form.phone,
             email: form.email,
             notes: form.notes || null,
+            paymentMethod: form.paymentMethod,
           }),
         },
         false
@@ -295,13 +300,54 @@ export default function Booking() {
                         </div>
                       ))}
                     </dl>
-                    <div className="mt-5 flex items-center justify-between rounded-xl bg-forest-800 p-4 text-white">
-                      <span className="text-sm font-bold uppercase tracking-wide">Valor estimado</span>
-                      <span className="font-display text-2xl font-bold text-gold-400">{formatMoney(pricing)}</span>
+                    <div className="mt-5 rounded-2xl bg-forest-800 p-4 text-white">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-bold uppercase tracking-wide">Valor total da reserva</span>
+                        <span className="font-display text-2xl font-bold text-gold-400">{formatMoney(pricing)}</span>
+                      </div>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-xl bg-white/10 p-3">
+                          <p className="text-[10px] font-extrabold uppercase tracking-wider text-white/60">
+                            Sinal (60%) — pago agora
+                          </p>
+                          <p className="mt-1 font-display text-lg font-bold text-gold-400">{formatMoney(sinal)}</p>
+                        </div>
+                        <div className="rounded-xl bg-white/10 p-3">
+                          <p className="text-[10px] font-extrabold uppercase tracking-wider text-white/60">
+                            Restante (40%) — pago na entrada
+                          </p>
+                          <p className="mt-1 font-display text-lg font-bold">{formatMoney(restante)}</p>
+                        </div>
+                      </div>
                     </div>
-                    <p className="mt-3 text-xs text-forest-800/60">
-                      O valor é estimado; a confirmação final é feita pelo parque. Pagamento poderá ser
-                      feito no local ou via M-Pesa/e-Mola (em breve online).
+                    <div className="mt-4">
+                      <label className="field-label">Forma de pagamento do sinal (60%) *</label>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {[
+                          { key: 'CASH', label: 'Dinheiro' },
+                          { key: 'MPESA', label: 'M-Pesa' },
+                          { key: 'EMOLA', label: 'e-Mola' },
+                          { key: 'CARD', label: 'Cartão' },
+                        ].map((m) => (
+                          <button
+                            type="button"
+                            key={m.key}
+                            onClick={() => setForm({ ...form, paymentMethod: m.key })}
+                            className={`rounded-xl border-2 px-3 py-2.5 text-xs font-bold uppercase tracking-wide transition-colors ${
+                              form.paymentMethod === m.key
+                                ? 'border-gold-500 bg-gold-400/15 text-forest-900'
+                                : 'border-forest-100 bg-white text-forest-800/60 hover:border-gold-300'
+                            }`}
+                          >
+                            {m.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="mt-3 rounded-xl bg-gold-400/15 px-4 py-3 text-xs text-forest-800/80">
+                      Ao confirmar paga <strong>60% ({formatMoney(sinal)})</strong> na reserva; o restante{' '}
+                      <strong>40% ({formatMoney(restante)})</strong> é pago na entrada no dia da visita. A confirmação
+                      final é feita pelo parque.
                     </p>
                   </div>
                 )}

@@ -6,6 +6,7 @@ import { usePageMeta } from '../lib/seo'
 import { formatDate, formatMoney } from '../lib/settings'
 import { Loading, STATUS_LABELS, STATUS_STYLES } from '../components/ui'
 import type { Reservation } from '../lib/types'
+import { PAYMENT_METHODS } from '../lib/types'
 
 export default function BookingConfirm() {
   const { code } = useParams()
@@ -13,6 +14,14 @@ export default function BookingConfirm() {
   const [loading, setLoading] = useState(true)
 
   usePageMeta('Reserva Confirmada', 'Detalhes da sua reserva.')
+
+  const payments = reservation?.payments || []
+  const totalPaid = payments.reduce((s, p) => s + p.amount, 0)
+  const remaining = Math.round(((reservation?.totalPrice || 0) - totalPaid) * 100) / 100
+  const sinal = payments.find((p) => p.stage === 'SINAL') || payments[0]
+  const finalPay = payments.find((p) => p.stage !== 'SINAL')
+  const firstDate = payments[0]?.paidAt
+  const lastDate = payments[payments.length - 1]?.paidAt
 
   useEffect(() => {
     if (!code) return
@@ -90,6 +99,52 @@ export default function BookingConfirm() {
                   {STATUS_LABELS[reservation.status] || reservation.status}
                 </p>
               </div>
+            </div>
+
+            <div className="mt-8 rounded-2xl bg-forest-800 p-6 text-white">
+              <h3 className="font-display text-lg font-bold">Pagamento</h3>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl bg-white/10 p-4">
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-white/60">
+                    Sinal (60%) — pago na reserva
+                  </p>
+                  <p className="mt-1 font-display text-xl font-bold text-gold-400">
+                    {formatMoney(sinal?.amount ?? 0)}
+                  </p>
+                  <p className="mt-1 text-xs text-white/70">
+                    {sinal
+                      ? `Pago em ${formatDate(sinal.paidAt)} · ${PAYMENT_METHODS[sinal.method] || sinal.method}`
+                      : 'Por confirmar'}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white/10 p-4">
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-white/60">
+                    Restante (40%) — pago na entrada
+                  </p>
+                  <p className="mt-1 font-display text-xl font-bold">{formatMoney(remaining)}</p>
+                  <p className="mt-1 text-xs text-white/70">
+                    {finalPay
+                      ? `Pago em ${formatDate(finalPay.paidAt)} · ${PAYMENT_METHODS[finalPay.method] || finalPay.method}`
+                      : `A pagar no dia da visita (${formatDate(reservation.date)})`}
+                  </p>
+                </div>
+              </div>
+              {firstDate && (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 text-center">
+                  <div className="rounded-xl bg-white/10 px-4 py-3">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-white/60">
+                      Data do 1º pagamento
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-gold-400">{formatDate(firstDate)}</p>
+                  </div>
+                  <div className="rounded-xl bg-white/10 px-4 py-3">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-white/60">
+                      Data do último pagamento
+                    </p>
+                    <p className="mt-1 text-sm font-bold">{formatDate(lastDate!)}</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-8 flex flex-wrap justify-center gap-3">

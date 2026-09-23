@@ -104,10 +104,18 @@ export const reservationSchema = z.object({
   phone: z.string().min(6).max(40),
   email: emailSchema,
   notes: z.string().max(1000).optional().nullable(),
+  paymentMethod: z.enum(['CASH', 'MPESA', 'EMOLA', 'CARD', 'OTHER']).optional().default('CASH'),
 })
 
 export const reservationStatusSchema = z.object({
   status: z.enum(['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED']),
+})
+
+export const reservationPaymentSchema = z.object({
+  method: z.enum(['CASH', 'MPESA', 'EMOLA', 'CARD', 'OTHER']),
+  stage: z.string().max(40).optional().default('FINAL'),
+  amount: z.coerce.number().positive().optional(),
+  date: z.string().optional(),
 })
 
 export const ticketSaleSchema = z.object({
