@@ -86,6 +86,25 @@ const PRESETS = [
 const compactMoney = (v: number) =>
   new Intl.NumberFormat('pt-PT', { notation: 'compact', maximumFractionDigits: 1 }).format(v) + ' MT'
 
+function RevenueTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null
+  const total = payload.reduce((a: number, p: { value: number }) => a + Number(p.value), 0)
+  return (
+    <div className="rounded-xl border border-forest-100 bg-white px-3 py-2.5 shadow-lg">
+      <p className="mb-1.5 text-xs font-extrabold text-forest-900">{label}</p>
+      {payload.map((p: { name: string; value: number; color?: string }) => (
+        <p key={p.name} className="flex items-center gap-2 text-xs font-semibold text-forest-800/80">
+          <span className="h-2 w-2 rounded-full" style={{ background: p.color || '#1f783c' }} />
+          {p.name}: {formatMoney(Number(p.value))}
+        </p>
+      ))}
+      <p className="mt-1.5 border-t border-forest-100 pt-1.5 text-xs font-bold text-forest-900">
+        Total: {formatMoney(total)}
+      </p>
+    </div>
+  )
+}
+
 export default function AdminReports() {
   usePageMeta('Relatórios')
   const [filters, setFilters] = useState(() => ({ ...monthRange(), status: 'todos' }))
@@ -195,6 +214,10 @@ export default function AdminReports() {
     visitReservas: d.visitors,
     visitEntradas: d.ticketVisitors || 0,
   }))
+  const resTotal = byDay.reduce((a, d) => a + d.Reservas, 0)
+  const entTotal = byDay.reduce((a, d) => a + d.Entradas, 0)
+  const dayPeak = byDay.reduce((a, d) => Math.max(a, d.Reservas + d.Entradas), 0)
+  const activeDays = byDay.filter((d) => d.Reservas > 0 || d.Entradas > 0).length
   const byService = (report?.byService || []).slice(0, 8).map((x) => ({
     name: x.name.length > 26 ? x.name.slice(0, 25) + '…' : x.name,
     Receita: x.revenue,
@@ -290,7 +313,14 @@ export default function AdminReports() {
           <div className="mt-6 grid gap-6 lg:grid-cols-3">
             <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-forest-100 lg:col-span-2">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                <h3 className="font-display font-bold text-forest-900">Evolução da receita</h3>
+                <div>
+                  <h3 className="font-display text-lg font-bold text-forest-900">Evolução da receita</h3>
+                  <p className="mt-0.5 text-xs font-semibold text-forest-800/50">
+                    Reservas <span className="font-bold text-forest-700">{formatMoney(resTotal)}</span> · Entradas{' '}
+                    <span className="font-bold text-gold-600">{formatMoney(entTotal)}</span> · Pico diário{' '}
+                    <span className="font-bold text-forest-700">{formatMoney(dayPeak)}</span>
+                  </p>
+                </div>
                 <div className="flex items-center gap-4 text-xs font-bold text-forest-800/60">
                   <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-forest-500" /> Reservas</span>
                   <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-gold-500" /> Entradas</span>
@@ -299,26 +329,44 @@ export default function AdminReports() {
               {byDay.length === 0 ? (
                 <p className="py-10 text-center text-sm text-forest-800/50">Sem movimentações no período.</p>
               ) : (
-                <ResponsiveContainer width="100%" height={280}>
-                  <AreaChart data={byDay} margin={{ left: 4, right: 8 }}>
-                    <defs>
-                      <linearGradient id="gReservas" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#1f783c" stopOpacity={0.45} />
-                        <stop offset="100%" stopColor="#1f783c" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="gEntradas" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#e0a526" stopOpacity={0.5} />
-                        <stop offset="100%" stopColor="#e0a526" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#eef3e9" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                    <YAxis tickFormatter={compactMoney} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={58} />
-                    <Tooltip formatter={(v) => formatMoney(Number(v))} contentStyle={{ borderRadius: 14, border: '1px solid #eef3e9', boxShadow: '0 8px 24px rgba(19,64,34,.08)' }} />
-                    <Area type="monotone" dataKey="Reservas" stroke="#1f783c" strokeWidth={2} fill="url(#gReservas)" stackId="1" />
-                    <Area type="monotone" dataKey="Entradas" stroke="#e0a526" strokeWidth={2} fill="url(#gEntradas)" stackId="1" />
-                  </AreaChart>
-                </ResponsiveContainer>
+                <>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={byDay} margin={{ left: 4, right: 8 }}>
+                      <defs>
+                        <linearGradient id="gReservas" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#1f783c" stopOpacity={0.45} />
+                          <stop offset="100%" stopColor="#1f783c" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="gEntradas" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#e0a526" stopOpacity={0.5} />
+                          <stop offset="100%" stopColor="#e0a526" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eef3e9" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} minTickGap={24} />
+                      <YAxis tickFormatter={compactMoney} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={58} />
+                      <Tooltip content={<RevenueTooltip />} />
+                      <Area type="monotone" dataKey="Reservas" stroke="#1f783c" strokeWidth={2} fill="url(#gReservas)" stackId="1" />
+                      <Area type="monotone" dataKey="Entradas" stroke="#e0a526" strokeWidth={2} fill="url(#gEntradas)" stackId="1" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl bg-forest-50/70 px-4 py-3">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-forest-800/50">Total reservas</p>
+                      <p className="mt-0.5 font-display text-lg font-bold text-forest-700">{formatMoney(resTotal)}</p>
+                    </div>
+                    <div className="rounded-2xl bg-gold-400/15 px-4 py-3">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-gold-600/80">Total entradas</p>
+                      <p className="mt-0.5 font-display text-lg font-bold text-gold-600">{formatMoney(entTotal)}</p>
+                    </div>
+                    <div className="rounded-2xl bg-white px-4 py-3 ring-1 ring-forest-100">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-forest-800/50">Dias com movimento</p>
+                      <p className="mt-0.5 font-display text-lg font-bold text-forest-900">
+                        {activeDays}<span className="text-sm font-semibold text-forest-800/50"> / {byDay.length}</span>
+                      </p>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
 
