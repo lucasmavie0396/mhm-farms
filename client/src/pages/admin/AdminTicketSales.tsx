@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  BadgeCheck,
   Banknote,
+  CalendarDays,
   CreditCard,
   Minus,
   ReceiptText,
   Plus,
   Printer,
+  Search,
   ShoppingCart,
   Smartphone,
 } from 'lucide-react'
@@ -15,7 +18,7 @@ import { useSettings } from '../../lib/settings'
 import { formatDateShort, formatMoney } from '../../lib/settings'
 import { PageHead, Spinner, Notice } from '../../components/admin'
 import { printSaleReceipt } from '../../components/ThermalReceipt'
-import type { Experience, TicketSale } from '../../lib/types'
+import type { Experience, Reservation, TicketSale } from '../../lib/types'
 import { PAYMENT_METHODS, type PaymentMethod } from '../../lib/types'
 
 function money(value: number) {
@@ -35,6 +38,57 @@ export default function AdminTicketSales() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [resCode, setResCode] = useState('')
+  const [reservation, setReservation] = useState<Reservation | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [paying, setPaying] = useState(false)
+  const [resMethod, setResMethod] = useState<PaymentMethod>('CASH')
+
+  const resRemaining = reservation
+    ? Math.round((reservation.totalPrice - (reservation.payments || []).reduce((s, p) => s + p.amount, 0)) * 100) / 100
+    : 0
+
+  const searchReservation = async () => {
+    const code = resCode.trim()
+    if (!code || searching) return
+    setSearching(true)
+    setError('')
+    try {
+      const r = await api<Reservation>(`/reservations/lookup?code=${encodeURIComponent(code)}`)
+      setReservation(r)
+    } catch (err) {
+      setReservation(null)
+      setError(err instanceof Error ? err.message : 'Reserva não encontrada.')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const payReservation = async () => {
+    if (!reservation || resRemaining <= 0.001 || paying) return
+    setPaying(true)
+    setError('')
+    try {
+      await api<{ payment: unknown; reservation: Reservation }>(
+        `/reservations/${reservation.id}/payments`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            method: resMethod,
+            stage: 'FINAL',
+            date: new Date().toISOString().slice(0, 10),
+          }),
+        }
+      )
+      setSuccess(`Pagamento do remanescente da reserva ${reservation.code} registado (${money(resRemaining)}).`)
+      setReservation(null)
+      setResCode('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao registar o pagamento.')
+    } finally {
+      setPaying(false)
+    }
+  }
 
   const loadSales = useCallback(() => {
     return api<TicketSale[]>('/ticket-sales')
@@ -42,6 +96,34 @@ export default function AdminTicketSales() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Erro ao carregar vendas.'))
       .finally(() => setLoading(false))
   }, [])
+
+  const sell = async () => {
+    if (!hasItems || total <= 0) return
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      const items = lines.map((l) => ({ category: l.category, qty: l.qty }))
+      const expId = experiences.find((e) => e.id === experience) ? experience : null
+      const sale = await api<TicketSale>('/ticket-sales', {
+        method: 'POST',
+        body: JSON.stringify({
+          items,
+          paymentMethod: method,
+          customerName: customer.trim() || null,
+          experienceId: expId,
+        }),
+      })
+      setSales((prev) => [sale, ...prev])
+      setSuccess(`Venda ${sale.code} registada. A imprimir recibo…`)
+      printSaleReceipt(sale, settings)
+      reset()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao registar a venda.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   useEffect(() => {
     loadSales()
@@ -84,34 +166,6 @@ export default function AdminTicketSales() {
     setSuccess('')
   }
 
-  const sell = async () => {
-    if (!hasItems || total <= 0) return
-    setSaving(true)
-    setError('')
-    setSuccess('')
-    try {
-      const items = lines.map((l) => ({ category: l.category, qty: l.qty }))
-      const expId = experiences.find((e) => e.id === experience) ? experience : null
-      const sale = await api<TicketSale>('/ticket-sales', {
-        method: 'POST',
-        body: JSON.stringify({
-          items,
-          paymentMethod: method,
-          customerName: customer.trim() || null,
-          experienceId: expId,
-        }),
-      })
-      setSales((prev) => [sale, ...prev])
-      setSuccess(`Venda ${sale.code} registada. A imprimir recibo…`)
-      printSaleReceipt(sale, settings)
-      reset()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao registar a venda.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   if (loading) return <Spinner />
 
   return (
@@ -134,6 +188,103 @@ export default function AdminTicketSales() {
 
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="space-y-6 xl:col-span-2">
+          <div className="rounded-3xl bg-gradient-to-br from-forest-700 to-forest-900 p-6 text-white shadow-sm">
+            <h3 className="flex items-center gap-2 font-display font-bold">
+              <BadgeCheck className="h-5 w-5 text-gold-400" /> Pagamento de reserva
+            </h3>
+            <p className="mt-1 text-xs text-white/70">
+              O cliente fez reserva com sinal (60%)? Cobre aqui o restante (40%) pago na entrada.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-forest-400" />
+                <input
+                  className="!border-0 !bg-white/10 !pl-10 !text-white placeholder:text-white/40"
+                  value={resCode}
+                  onChange={(e) => setResCode(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && searchReservation()}
+                  placeholder="Código da reserva (ex.: MHM-2026-000012)"
+                />
+              </div>
+              <button
+                onClick={searchReservation}
+                disabled={searching || !resCode.trim()}
+                className="btn-primary !bg-gold-500 !py-2.5 !text-forest-950 hover:!bg-gold-400 disabled:!opacity-40"
+              >
+                {searching ? <Spinner /> : 'Procurar'}
+              </button>
+            </div>
+
+            {reservation && (
+              <div className="mt-4 rounded-2xl bg-white/10 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-white/60">Reserva</p>
+                    <p className="font-mono text-sm font-bold text-gold-400">{reservation.code}</p>
+                    <p className="mt-1 text-sm font-semibold">{reservation.name}</p>
+                    <p className="mt-0.5 flex items-center gap-1 text-xs text-white/70">
+                      <CalendarDays className="h-3.5 w-3.5" /> {formatDateShort(reservation.date)} · {reservation.time}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-white/60">Em falta</p>
+                    <p className={`font-display text-2xl font-bold ${resRemaining > 0.001 ? 'text-gold-400' : 'text-emerald-400'}`}>
+                      {money(resRemaining)}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-lg bg-white/10 px-3 py-2">
+                    <span className="text-xs text-white/60">Total da reserva</span>
+                    <p className="font-bold">{money(reservation.totalPrice)}</p>
+                  </div>
+                  <div className="rounded-lg bg-white/10 px-3 py-2">
+                    <span className="text-xs text-white/60">Já pago</span>
+                    <p className="font-bold">{money(reservation.totalPrice - resRemaining)}</p>
+                  </div>
+                </div>
+                {resRemaining > 0.001 ? (
+                  <>
+                    <div className="mt-3">
+                      <label className="field-label !text-white/60">Forma de pagamento</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(Object.keys(PAYMENT_METHODS) as PaymentMethod[]).map((m) => (
+                          <button
+                            key={m}
+                            onClick={() => setResMethod(m)}
+                            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                              resMethod === m
+                                ? 'border-gold-400 bg-gold-400 text-forest-950'
+                                : 'border-white/20 bg-white/10 text-white hover:bg-white/20'
+                            }`}
+                          >
+                            {m === 'CASH' && <Banknote className="h-3.5 w-3.5" />}
+                            {(m === 'MPESA' || m === 'EMOLA') && <Smartphone className="h-3.5 w-3.5" />}
+                            {m === 'CARD' && <CreditCard className="h-3.5 w-3.5" />}
+                            {m === 'OTHER' && <ReceiptText className="h-3.5 w-3.5" />}
+                            {PAYMENT_METHODS[m]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      onClick={payReservation}
+                      disabled={paying}
+                      className="btn-primary mt-4 w-full !bg-gold-500 !py-3 !text-forest-950 hover:!bg-gold-400 disabled:!opacity-40"
+                    >
+                      <Banknote className="h-5 w-5" />
+                      {paying ? 'A registar…' : `Cobrar restante (${money(resRemaining)})`}
+                    </button>
+                  </>
+                ) : (
+                  <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-emerald-400">
+                    <BadgeCheck className="h-4 w-4" /> Reserva já totalmente liquidada.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-forest-100">
             <h3 className="mb-4 font-display font-bold text-forest-900">Entradas</h3>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Banknote, CheckCircle2, Download, Eye, FileDown, Printer, Search, XCircle } from 'lucide-react'
+import { CheckCircle2, Download, Eye, FileDown, Printer, Search, XCircle } from 'lucide-react'
 import { api, getToken } from '../../lib/api'
 import { usePageMeta } from '../../lib/seo'
 import { formatDateShort, formatMoney } from '../../lib/settings'
@@ -18,17 +18,18 @@ export default function AdminReservations() {
   const [query, setQuery] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
-  const [view, setView] = useState<Reservation | null>(null)
-  const [payForm, setPayForm] = useState({ method: 'CASH', date: new Date().toISOString().slice(0, 10), amount: '' })
-  const [paying, setPaying] = useState(false)
+const [view, setView] = useState<Reservation | null>(null)
 
   const paidFor = (r: Reservation) => (r.payments || []).reduce((s, p) => s + p.amount, 0)
   const remainingFor = (r: Reservation) => Math.round((r.totalPrice - paidFor(r)) * 100) / 100
 
-  const openView = (r: Reservation) => {
-    setView(r)
-    setPayForm((f) => ({ ...f, date: new Date().toISOString().slice(0, 10), amount: '' }))
+  const stageLabel = (stage: string) => {
+    if (stage === 'SINAL') return 'Sinal (60%)'
+    if (stage === 'FINAL') return 'Restante (40%)'
+    return stage
   }
+
+  const openView = (r: Reservation) => setView(r)
 
   const load = async () => {
     setLoading(true)
@@ -59,35 +60,6 @@ export default function AdminReservations() {
     await api(`/reservations/${id}`, { method: 'DELETE' })
     setView(null)
     await load()
-  }
-
-  const registerPayment = async () => {
-    if (!view) return
-    setPaying(true)
-    try {
-      await api(`/reservations/${view.id}/payments`, {
-        method: 'POST',
-        body: JSON.stringify({
-          method: payForm.method,
-          stage: 'FINAL',
-          amount: payForm.amount ? Number(payForm.amount) : undefined,
-          date: payForm.date || undefined,
-        }),
-      })
-      await load()
-      const fresh = items.find((r) => r.id === view.id)
-      if (fresh) setView(fresh)
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro ao registar o pagamento.')
-    } finally {
-      setPaying(false)
-    }
-  }
-
-  const stageLabel = (stage: string) => {
-    if (stage === 'SINAL') return 'Sinal (60%)'
-    if (stage === 'FINAL') return 'Restante (40%)'
-    return stage
   }
 
   const [pdfBusy, setPdfBusy] = useState<string | null>(null)
@@ -335,54 +307,13 @@ export default function AdminReservations() {
               ) : (
                 <p className="mt-2 text-sm text-forest-700/60">Sem pagamentos registados.</p>
               )}
-            </div>
-            {remainingFor(view) > 0.001 && (
-              <div className="rounded-xl bg-forest-50 p-3">
-                <p className="text-[10px] font-extrabold uppercase tracking-wider text-forest-800/50">
-                  Registar pagamento de entrada (restante)
+              {remainingFor(view) > 0.001 && (
+                <p className="mt-2 text-xs text-forest-800/60">
+                  Falta pagar {formatMoney(remainingFor(view))} — a cobrar na tela{' '}
+                  <span className="font-bold text-forest-800">Venda de entradas</span> quando o visitante chegar.
                 </p>
-                <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                  <div>
-                    <label className="field-label">Método</label>
-                    <select
-                      value={payForm.method}
-                      onChange={(e) => setPayForm({ ...payForm, method: e.target.value })}
-                    >
-                      {Object.entries(PAYMENT_METHODS).map(([k, v]) => (
-                        <option key={k} value={k}>{v}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="field-label">Data</label>
-                    <input
-                      type="date"
-                      value={payForm.date}
-                      max={new Date().toISOString().slice(0, 10)}
-                      onChange={(e) => setPayForm({ ...payForm, date: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="field-label">Valor (MT)</label>
-                    <input
-                      type="number"
-                      value={payForm.amount}
-                      placeholder={String(remainingFor(view))}
-                      min={0}
-                      onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <button
-                  onClick={registerPayment}
-                  disabled={paying}
-                  className="btn-primary mt-3 !py-2.5"
-                >
-                  {paying ? <Spinner /> : <Banknote className="h-4 w-4" />}
-                  Registar pagamento
-                </button>
-              </div>
-            )}
+              )}
+            </div>
             <div className="">
                   <label className="field-label">Alterar estado</label>
                   <div className="flex flex-wrap gap-2">

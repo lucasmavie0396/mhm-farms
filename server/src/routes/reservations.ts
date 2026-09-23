@@ -132,7 +132,7 @@ router.patch('/:id/status', protect, allowRoles('ADMIN', 'MANAGER'), validate(re
   res.json(reservation)
 })
 
-router.post('/:id/payments', protect, allowRoles('ADMIN', 'MANAGER'), validate(reservationPaymentSchema), async (req, res) => {
+router.post('/:id/payments', protect, allowRoles('ADMIN', 'MANAGER', 'STAFF'), validate(reservationPaymentSchema), async (req, res) => {
   const id = paramId(req)
   const reservation = await prisma.reservation.findUnique({
     where: { id },
