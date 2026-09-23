@@ -8,6 +8,9 @@ build/
 server/prisma/*.db
 server/prisma/*.db-journal
 server/data/*.sql
+server/data/*.db
+server/data/*.db-shm
+server/data/*.db-wal
 server/uploads/
 server/reservations/
 client/.vite/
