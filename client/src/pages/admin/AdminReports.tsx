@@ -6,6 +6,7 @@ import {
   Coins,
   CreditCard,
   Download,
+  FileText,
   MessageSquare,
   Repeat,
   Smartphone,
@@ -28,7 +29,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { api } from '../../lib/api'
+import { api, getToken } from '../../lib/api'
 import { usePageMeta } from '../../lib/seo'
 import { formatDateShort, formatMoney } from '../../lib/settings'
 import { PageHead, Spinner, Notice } from '../../components/admin'
@@ -140,6 +141,32 @@ export default function AdminReports() {
     a.download = `relatorio-${report.range.from || 'tudo'}-${report.range.to || 'atual'}.csv`
     a.click()
     URL.revokeObjectURL(a.href)
+  }
+
+  const exportPdf = async () => {
+    if (!report) return
+    try {
+      const q = new URLSearchParams()
+      if (report.range.from) q.set('from', report.range.from)
+      if (report.range.to) q.set('to', report.range.to)
+      if (report.range.status !== 'todos') q.set('status', report.range.status)
+      const headers: Record<string, string> = {}
+      const token = getToken()
+      if (token) headers.Authorization = `Bearer ${token}`
+      const res = await fetch(`/api/reports/revenue/pdf?${q}`, { headers })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Erro ao gerar o PDF.')
+      }
+      const blob = await res.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `relatorio-receitas-${report.range.from || 'tudo'}-${report.range.to || 'atual'}.pdf`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao gerar o PDF.')
+    }
   }
 
   const s = report?.summary
@@ -396,7 +423,7 @@ export default function AdminReports() {
                       </div>
                       <p className="mt-3 font-display text-xl font-bold text-forest-900">{formatMoney(m.revenue)}</p>
                       <p className="text-xs font-bold text-forest-800/60">{PAYMENT_METHODS[m.name as PaymentMethod] || m.name}</p>
-                      <p className="text-[11px] font-semibold text-forest-800/50">{m.count} venda{m.count === 1 ? '' : 's'}</p>
+                      <p className="text-[11px] font-semibold text-forest-800/50">{m.count} venda{m.count === 1 ? '' : 's'} · {m.qty ?? 0} entrada{m.qty === 1 ? '' : 's'}</p>
                       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white">
                         <div className={`h-full rounded-full ${meta.bar}`} style={{ width: `${Math.max(share, 4)}%` }} />
                       </div>
@@ -441,6 +468,9 @@ export default function AdminReports() {
                 </h3>
                 <button onClick={exportCsv} className="btn-outline !px-4 !py-2 !text-xs">
                   <Download className="h-4 w-4" /> Exportar CSV
+                </button>
+                <button onClick={exportPdf} className="btn-primary !px-4 !py-2 !text-xs">
+                  <FileText className="h-4 w-4" /> Exportar PDF
                 </button>
               </div>
               <div className="overflow-x-auto">

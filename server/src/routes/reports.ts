@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { allowRoles, protect } from '../lib/auth'
 import type { PriceBreakdown } from '../lib/pricing'
+import { generateReportPdf } from '../lib/reportPdf'
 
 const router = Router()
 
@@ -11,11 +12,53 @@ function dayKey(d: Date): string {
 
 const MONEY_STATUSES = ['CONFIRMED', 'COMPLETED']
 
-router.get('/revenue', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res) => {
-  const from = String(req.query.from || '').slice(0, 10)
-  const to = String(req.query.to || '').slice(0, 10)
-  const status = String(req.query.status || 'todos')
+export type RevenueReportData = {
+  range: { from: string; to: string; status: string }
+  summary: {
+    reservations: number
+    visitors: number
+    revenue: number
+    pendingValue: number
+    confirmed: number
+    completed: number
+    cancelled: number
+    pending: number
+    ticketCount: number
+    ticketsSold: number
+    ticketRevenue: number
+    ticketVisitors: number
+  }
+  byDay: {
+    name: string
+    count: number
+    revenue: number
+    visitors: number
+    tickets?: number
+    sold?: number
+    ticketRevenue?: number
+    ticketVisitors?: number
+    totalVisitors?: number
+  }[]
+  byStatus: { name: string; count: number; revenue: number }[]
+  byService: { name: string; qty: number; revenue: number }[]
+  ticketByMethod: { name: string; count: number; qty: number; revenue: number }[]
+  reservations: {
+    id: string
+    code: string
+    date: Date
+    time: string
+    name: string
+    email: string
+    phone: string
+    visitors: number
+    visitType: string
+    experience: string | null
+    status: string
+    totalPrice: number
+  }[]
+}
 
+async function collectRevenueReport(from: string, to: string, status: string): Promise<RevenueReportData> {
   const where: Record<string, unknown> = {}
   const saleWhere: Record<string, unknown> = { status: 'PAID' }
   if (from) {
@@ -41,7 +84,7 @@ router.get('/revenue', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res)
   ])
 
   const byStatus = new Map<string, { count: number; revenue: number; visitors: number }>()
-  const byDay = new Map<string, { count: number; revenue: number; visitors: number; tickets?: number; ticketRevenue?: number; ticketVisitors?: number }>()
+  const byDay = new Map<string, { count: number; revenue: number; visitors: number; tickets?: number; sold?: number; ticketRevenue?: number; ticketVisitors?: number; totalVisitors?: number }>()
   const byService = new Map<string, { qty: number; revenue: number }>()
 
   for (const r of reservations) {
@@ -76,27 +119,24 @@ router.get('/revenue', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res)
     }
   }
 
-  const toList = <T,>(m: Map<string, T>, sortValue: (v: T) => number) =>
-    [...m.entries()].map(([name, value]) => ({ name, ...value })).sort((a, b) => sortValue(b) - sortValue(a))
-
   // ---- Vendas de entradas ----
   let ticketRevenue = 0
   let ticketVisitors = 0
   let ticketCount = ticketSales.length
   let ticketsSold = 0
-  const byMethod = new Map<string, { count: number; revenue: number }>()
+  const byMethod = new Map<string, { count: number; revenue: number; qty: number }>()
   for (const s of ticketSales) {
     ticketRevenue += s.totalPrice
     ticketVisitors += s.totalVisitors
     const key = dayKey(s.date)
-    const d = byDay.get(key) ?? { count: 0, revenue: 0, visitors: 0, tickets: 0, ticketRevenue: 0, ticketVisitors: 0 }
+    const d = byDay.get(key) ?? { count: 0, revenue: 0, visitors: 0, tickets: 0, sold: 0, ticketRevenue: 0, ticketVisitors: 0 }
     d.tickets = (d.tickets ?? 0) + 1
     d.revenue += s.totalPrice
     d.ticketRevenue = (d.ticketRevenue ?? 0) + s.totalPrice
     d.ticketVisitors = (d.ticketVisitors ?? 0) + s.totalVisitors
     byDay.set(key, d)
 
-    const m = byMethod.get(s.paymentMethod) ?? { count: 0, revenue: 0 }
+    const m = byMethod.get(s.paymentMethod) ?? { count: 0, revenue: 0, qty: 0 }
     m.count += 1
     m.revenue += s.totalPrice
     byMethod.set(s.paymentMethod, m)
@@ -106,11 +146,18 @@ router.get('/revenue', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res)
       : []
     for (const item of saleItems) {
       ticketsSold += item.qty
+      if (d.sold !== undefined) d.sold += item.qty
+      const method = byMethod.get(s.paymentMethod)
+      if (method) method.qty += item.qty
       const svc = byService.get(item.service) ?? { qty: 0, revenue: 0 }
       svc.qty += item.qty
       svc.revenue += item.total
       byService.set(item.service, svc)
     }
+  }
+
+  for (const [, d] of byDay) {
+    d.totalVisitors = (d.visitors || 0) + (d.ticketVisitors || 0)
   }
 
   let revenue = 0
@@ -122,7 +169,10 @@ router.get('/revenue', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res)
     else if (r.status === 'PENDING') pendingValue += r.totalPrice
   }
 
-  res.json({
+  const toList = <T,>(m: Map<string, T>, sortValue: (v: T) => number) =>
+    [...m.entries()].map(([name, value]) => ({ name, ...value })).sort((a, b) => sortValue(b) - sortValue(a))
+
+  return {
     range: { from, to, status },
     summary: {
       reservations: reservations.length,
@@ -158,7 +208,34 @@ router.get('/revenue', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res)
       status: r.status,
       totalPrice: r.totalPrice,
     })),
-  })
+  }
+}
+
+router.get('/revenue', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res) => {
+  const from = String(req.query.from || '').slice(0, 10)
+  const to = String(req.query.to || '').slice(0, 10)
+  const status = String(req.query.status || 'todos')
+  const report = await collectRevenueReport(from, to, status)
+  res.json(report)
+})
+
+router.get('/revenue/pdf', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res) => {
+  const from = String(req.query.from || '').slice(0, 10)
+  const to = String(req.query.to || '').slice(0, 10)
+  const status = String(req.query.status || 'todos')
+  try {
+    const report = await collectRevenueReport(from, to, status)
+    const buf = await generateReportPdf(report)
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="relatorio-receitas-${from || 'tudo'}-${to || 'atual'}.pdf"`
+    )
+    res.send(buf)
+  } catch (err) {
+    console.error('Erro ao gerar PDF do relatório:', err)
+    res.status(500).json({ error: 'Erro ao gerar o PDF do relatório.' })
+  }
 })
 
 export default router

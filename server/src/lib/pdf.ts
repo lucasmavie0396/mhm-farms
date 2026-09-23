@@ -13,13 +13,13 @@ const GREEN = '#1B4332'
 const GOLD = '#D4A017'
 const LIGHT = '#F3F7F2'
 
-type SettingsBundle = {
+export type SettingsBundle = {
   branding?: { logo?: string }
   contacts?: Record<string, string>
   tagline?: string
 }
 
-async function loadSettings(): Promise<SettingsBundle> {
+export async function loadSettings(): Promise<SettingsBundle> {
   const rows = await prisma.setting.findMany()
   const s: Record<string, unknown> = {}
   for (const r of rows) {
@@ -36,7 +36,7 @@ async function loadSettings(): Promise<SettingsBundle> {
   }
 }
 
-async function logoFile(logoUrl?: string): Promise<string | null> {
+export async function logoFile(logoUrl?: string): Promise<string | null> {
   if (!logoUrl) return null
   if (logoUrl.startsWith('/uploads/')) {
     const p = path.join(uploadsDir, path.basename(logoUrl))
