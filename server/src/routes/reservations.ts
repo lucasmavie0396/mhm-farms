@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { allowRoles, protect } from '../lib/auth'
-import { validate, generateReservationCode, paramId } from '../lib/utils'
+import { validate, generateReservationCode, generateTicketSaleCode, paramId } from '../lib/utils'
 import { reservationSchema, reservationStatusSchema, reservationPaymentSchema } from '../lib/schemas'
 import { generateAndSaveReservationPdf, generateReservationPdf } from '../lib/pdf'
 import { buildBreakdown } from '../lib/pricing'
@@ -154,7 +154,8 @@ router.post('/:id/payments', protect, allowRoles('ADMIN', 'MANAGER', 'STAFF'), v
     return
   }
   const paidAt = req.body.date ? new Date(String(req.body.date)) : new Date()
-  const payment = await prisma.$transaction(async (tx) => {
+  const saleCode = await generateTicketSaleCode()
+  const payload = await prisma.$transaction(async (tx) => {
     const created = await tx.reservationPayment.create({
       data: {
         reservationId: id,
@@ -172,7 +173,31 @@ router.post('/:id/payments', protect, allowRoles('ADMIN', 'MANAGER', 'STAFF'), v
       status = 'CONFIRMED'
     }
     await tx.reservation.update({ where: { id }, data: { status } })
-    return created
+    const sale = await tx.ticketSale.create({
+      data: {
+        code: saleCode,
+        items: [
+          {
+            service: `Pagamento de reserva (${reservation.code})`,
+            qty: 1,
+            unit: amount,
+            total: amount,
+          },
+        ] as Prisma.InputJsonValue,
+        totalPrice: amount,
+        totalVisitors: reservation.totalVisitors,
+        paymentMethod: req.body.method,
+        customerName: reservation.name,
+        status: 'PAID',
+        sellerId: req.user?.id || null,
+        reservationId: id,
+      },
+      include: {
+        seller: { select: { id: true, name: true } },
+        reservation: { select: { id: true, code: true } },
+      },
+    })
+    return { payment: created, sale }
   })
   const updated = await prisma.reservation.findUnique({
     where: { id },
@@ -183,7 +208,7 @@ router.post('/:id/payments', protect, allowRoles('ADMIN', 'MANAGER', 'STAFF'), v
   } catch (err) {
     console.error('Erro ao gerar PDF da reserva:', err)
   }
-  res.status(201).json({ payment, reservation: updated })
+  res.status(201).json({ payment: payload.payment, sale: payload.sale, reservation: updated })
 })
 
 router.get('/:id/pdf', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res) => {

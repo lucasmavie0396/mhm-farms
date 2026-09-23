@@ -17,7 +17,7 @@ import { usePageMeta } from '../../lib/seo'
 import { useSettings } from '../../lib/settings'
 import { formatDateShort, formatMoney } from '../../lib/settings'
 import { PageHead, Spinner, Notice } from '../../components/admin'
-import { printSaleReceipt } from '../../components/ThermalReceipt'
+import { printReservationReceipt, printSaleReceipt } from '../../components/ThermalReceipt'
 import type { Experience, Reservation, TicketSale } from '../../lib/types'
 import { PAYMENT_METHODS, type PaymentMethod } from '../../lib/types'
 
@@ -69,7 +69,7 @@ export default function AdminTicketSales() {
     setPaying(true)
     setError('')
     try {
-      await api<{ payment: unknown; reservation: Reservation }>(
+      const out = await api<{ payment: unknown; reservation: Reservation; sale: TicketSale }>(
         `/reservations/${reservation.id}/payments`,
         {
           method: 'POST',
@@ -81,6 +81,7 @@ export default function AdminTicketSales() {
         }
       )
       setSuccess(`Pagamento do remanescente da reserva ${reservation.code} registado (${money(resRemaining)}).`)
+      printReservationReceipt(out.reservation, out.sale, settings)
       setReservation(null)
       setResCode('')
     } catch (err) {
@@ -430,7 +431,16 @@ export default function AdminTicketSales() {
                 <tr key={s.id} className="border-b border-forest-50 hover:bg-forest-50/50">
                   <td className="py-2.5 font-mono text-xs font-bold text-forest-700">{s.code}</td>
                   <td className="py-2.5 text-forest-800/70">{formatDateShort(s.date)}</td>
-                  <td className="py-2.5 font-semibold text-forest-900">{s.customerName || '—'}</td>
+                  <td className="py-2.5 font-semibold text-forest-900">
+                    <span className="flex items-center gap-1.5">
+                      {s.reservationId && (
+                        <span className="rounded bg-gold-400/15 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-gold-600">
+                          Reserva
+                        </span>
+                      )}
+                      {s.customerName || (s.reservation ? s.reservation.code : '—')}
+                    </span>
+                  </td>
                   <td className="py-2.5 text-right text-forest-800/70">{s.totalVisitors}</td>
                   <td className="py-2.5 text-right font-bold text-forest-900">{money(s.totalPrice)}</td>
                   <td className="py-2.5 text-forest-800/70">

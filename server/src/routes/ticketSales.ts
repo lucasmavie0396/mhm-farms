@@ -59,7 +59,10 @@ router.get('/', protect, allowRoles('ADMIN', 'MANAGER', 'STAFF'), async (req, re
   if (method && method !== 'todos') where.paymentMethod = method
   const sales = await prisma.ticketSale.findMany({
     where,
-    include: { seller: { select: { id: true, name: true } } },
+    include: {
+      seller: { select: { id: true, name: true } },
+      reservation: { select: { id: true, code: true } },
+    },
     orderBy: { createdAt: 'desc' },
   })
   res.json(sales)
@@ -68,7 +71,10 @@ router.get('/', protect, allowRoles('ADMIN', 'MANAGER', 'STAFF'), async (req, re
 router.get('/:id', protect, allowRoles('ADMIN', 'MANAGER', 'STAFF'), async (req, res) => {
   const sale = await prisma.ticketSale.findUnique({
     where: { id: paramId(req) },
-    include: { seller: { select: { id: true, name: true } } },
+    include: {
+      seller: { select: { id: true, name: true } },
+      reservation: { select: { id: true, code: true } },
+    },
   })
   if (!sale) {
     res.status(404).json({ error: 'Venda não encontrada.' })

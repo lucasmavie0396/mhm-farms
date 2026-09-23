@@ -87,13 +87,13 @@ router.get('/', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res) => {
       orderBy: { date: 'desc' },
       take: 6,
     }),
-    prisma.ticketSale.count({ where: { ...range, status: 'PAID' } }),
+    prisma.ticketSale.count({ where: { ...range, status: 'PAID', reservationId: null } }),
     prisma.ticketSale.aggregate({
-      where: { ...range, status: 'PAID' },
+      where: { ...range, status: 'PAID', reservationId: null },
       _sum: { totalPrice: true },
     }),
     prisma.ticketSale.aggregate({
-      where: { ...range, status: 'PAID' },
+      where: { ...range, status: 'PAID', reservationId: null },
       _sum: { totalVisitors: true },
     }),
   ])

@@ -261,6 +261,8 @@ export interface TicketSale {
   customerName?: string | null
   status: string
   seller?: { id: string; name: string } | null
+  reservationId?: string | null
+  reservation?: { id: string; code: string } | null
   createdAt: string
 }
 

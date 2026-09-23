@@ -79,6 +79,7 @@ async function collectRevenueReport(from: string, to: string, status: string): P
     }),
     prisma.ticketSale.findMany({
       where: saleWhere,
+      include: { reservation: { select: { code: true } } },
       orderBy: { date: 'asc' },
     }),
   ])
@@ -122,10 +123,24 @@ async function collectRevenueReport(from: string, to: string, status: string): P
   // ---- Vendas de entradas ----
   let ticketRevenue = 0
   let ticketVisitors = 0
-  let ticketCount = ticketSales.length
+  let ticketCount = 0
   let ticketsSold = 0
   const byMethod = new Map<string, { count: number; revenue: number; qty: number }>()
   for (const s of ticketSales) {
+    const isReservationSale = !!s.reservationId
+    const saleItems = Array.isArray((s as unknown as { items?: unknown }).items)
+      ? ((s as unknown as { items: { service: string; qty: number; total: number }[] }).items ?? [])
+      : []
+
+    const m = byMethod.get(s.paymentMethod) ?? { count: 0, revenue: 0, qty: 0 }
+    m.count += 1
+    m.revenue += s.totalPrice
+    for (const item of saleItems) m.qty += item.qty
+    byMethod.set(s.paymentMethod, m)
+
+    if (isReservationSale) continue
+
+    ticketCount += 1
     ticketRevenue += s.totalPrice
     ticketVisitors += s.totalVisitors
     const key = dayKey(s.date)
@@ -136,19 +151,9 @@ async function collectRevenueReport(from: string, to: string, status: string): P
     d.ticketVisitors = (d.ticketVisitors ?? 0) + s.totalVisitors
     byDay.set(key, d)
 
-    const m = byMethod.get(s.paymentMethod) ?? { count: 0, revenue: 0, qty: 0 }
-    m.count += 1
-    m.revenue += s.totalPrice
-    byMethod.set(s.paymentMethod, m)
-
-    const saleItems = Array.isArray((s as unknown as { items?: unknown }).items)
-      ? ((s as unknown as { items: { service: string; qty: number; total: number }[] }).items ?? [])
-      : []
     for (const item of saleItems) {
       ticketsSold += item.qty
       if (d.sold !== undefined) d.sold += item.qty
-      const method = byMethod.get(s.paymentMethod)
-      if (method) method.qty += item.qty
       const svc = byService.get(item.service) ?? { qty: 0, revenue: 0 }
       svc.qty += item.qty
       svc.revenue += item.total

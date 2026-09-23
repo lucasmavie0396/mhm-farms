@@ -163,6 +163,7 @@ model Reservation {
   totalPrice   Float             @default(0)
   breakdown    Json?
   payments     ReservationPayment[]
+  sales        TicketSale[]
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 }
@@ -258,16 +259,21 @@ model Feedback {
 }
 
 model TicketSale {
-  id            String    @id @default(cuid())
-  code          String    @unique
-  date          DateTime  @default(now())
+  id            String       @id @default(cuid())
+  code          String       @unique
+  date          DateTime     @default(now())
   items         Json
   totalPrice    Float
-  totalVisitors Int       @default(0)
+  totalVisitors Int          @default(0)
   paymentMethod String
   customerName  String?
-  status        String    @default("PAID")
+  status        String       @default("PAID")
   sellerId      String?
-  seller        User?     @relation(fields: [sellerId], references: [id], onDelete: SetNull)
-  createdAt     DateTime  @default(now())
+  seller        User?        @relation(fields: [sellerId], references: [id], onDelete: SetNull)
+  reservationId String?
+  reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+
+  @@index([reservationId])
+  @@index([date])
 }
