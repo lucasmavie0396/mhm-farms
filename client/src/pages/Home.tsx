@@ -18,6 +18,7 @@ import { useI18n } from '../lib/i18n'
 import { usePageMeta } from '../lib/seo'
 import { useSettings } from '../lib/settings'
 import { AnimalCard, EventCard, ExperienceCard, NewsCard } from '../components/cards'
+import { AnimalModal } from '../components/AnimalModal'
 import { Loading, Reveal, SectionTitle, Stars } from '../components/ui'
 import type { Animal, Event, Experience, Feedback, GalleryItem, News } from '../lib/types'
 
@@ -34,6 +35,7 @@ export default function Home() {
   const [gallery, setGallery] = useState<GalleryItem[]>([])
   const [feedback, setFeedback] = useState<Feedback[]>([])
   const [loading, setLoading] = useState(true)
+  const [animalModal, setAnimalModal] = useState<{ index: number } | null>(null)
 
   usePageMeta(undefined, settings.seo?.description)
 
@@ -178,7 +180,11 @@ export default function Home() {
           />
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {animals.slice(0, 4).map((a) => (
-              <AnimalCard key={a.id} animal={a} />
+              <AnimalCard
+                key={a.id}
+                animal={a}
+                onOpen={() => setAnimalModal({ index: animals.indexOf(a) })}
+              />
             ))}
           </div>
           <div className="mt-10 text-center">
@@ -416,6 +422,15 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {animalModal && (
+        <AnimalModal
+          animals={animals.slice(0, 4)}
+          index={animalModal.index}
+          onClose={() => setAnimalModal(null)}
+          onNavigate={(i) => setAnimalModal({ index: i })}
+        />
+      )}
     </div>
   )
 }

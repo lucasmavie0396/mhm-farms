@@ -4,6 +4,7 @@ import { PawPrint, Search } from 'lucide-react'
 import { api } from '../lib/api'
 import { usePageMeta } from '../lib/seo'
 import { AnimalCard, PageHero } from '../components/cards'
+import { AnimalModal } from '../components/AnimalModal'
 import { EmptyState, Loading } from '../components/ui'
 import type { Animal } from '../lib/types'
 
@@ -29,6 +30,7 @@ export default function Animals() {
   const [query, setQuery] = useState(initialQ)
   const [animals, setAnimals] = useState<Animal[]>([])
   const [loading, setLoading] = useState(true)
+  const [modal, setModal] = useState<{ index: number } | null>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -99,7 +101,11 @@ export default function Animals() {
           ) : (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {animals.map((a) => (
-                <AnimalCard key={a.id} animal={a} />
+                <AnimalCard
+                  key={a.id}
+                  animal={a}
+                  onOpen={() => setModal({ index: animals.indexOf(a) })}
+                />
               ))}
             </div>
           )}
@@ -118,6 +124,15 @@ export default function Animals() {
           </div>
         </div>
       </section>
+
+      {modal && (
+        <AnimalModal
+          animals={animals}
+          index={modal.index}
+          onClose={() => setModal(null)}
+          onNavigate={(i) => setModal({ index: i })}
+        />
+      )}
     </div>
   )
 }

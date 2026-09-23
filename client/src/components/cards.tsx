@@ -3,13 +3,15 @@ import { Link } from 'react-router-dom'
 import { formatDateShort, formatMoney } from '../lib/settings'
 import type { Animal, Event, Experience, News } from '../lib/types'
 
-export function AnimalCard({ animal }: { animal: Animal }) {
+export function AnimalCard({ animal, onOpen }: { animal: Animal; onOpen?: (a: Animal) => void }) {
   return (
-    <Link
-      to={`/animais/${animal.slug}`}
-      className="group overflow-hidden rounded-3xl bg-white shadow-md shadow-forest-900/10 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:shadow-forest-900/20"
-    >
-      <div className="relative h-56 overflow-hidden">
+    <div className="group overflow-hidden rounded-3xl bg-white shadow-md shadow-forest-900/10 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:shadow-forest-900/20">
+      <button
+        type="button"
+        onClick={() => onOpen?.(animal)}
+        className="relative block h-56 w-full cursor-pointer overflow-hidden text-left"
+        aria-label={`Ver detalhes de ${animal.name}`}
+      >
         <img
           src={animal.mainImage}
           alt={animal.name}
@@ -22,17 +24,20 @@ export function AnimalCard({ animal }: { animal: Animal }) {
         {animal.featured && (
           <span className="badge absolute right-3 top-3 bg-gold-500 text-forest-950">Destaque</span>
         )}
-      </div>
+      </button>
       <div className="p-5">
         <h3 className="font-display text-xl font-bold text-forest-900 group-hover:text-forest-700">
           {animal.name}
         </h3>
         <p className="mt-1 line-clamp-2 text-sm text-forest-800/70">{animal.description}</p>
-        <div className="mt-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-forest-700 group-hover:text-gold-600">
+        <Link
+          to={`/animais/${animal.slug}`}
+          className="mt-4 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-forest-700 group-hover:text-gold-600"
+        >
           Ver Mais <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
-        </div>
+        </Link>
       </div>
-    </Link>
+    </div>
   )
 }
 
