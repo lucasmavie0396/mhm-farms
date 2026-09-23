@@ -136,30 +136,30 @@ export default function AdminReports() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const exportCsv = () => {
+  const exportCsv = async () => {
     if (!report) return
-    const head = ['Código', 'Data', 'Hora', 'Nome', 'Email', 'Telefone', 'Visitantes', 'Tipo', 'Experiência', 'Estado', 'Valor (MT)']
-    const rows = report.reservations.map((r) =>
-      [
-        r.code,
-        formatDateShort(r.date),
-        r.time,
-        `"${r.name}"`,
-        r.email,
-        r.phone,
-        r.visitors,
-        `"${r.visitType}"`,
-        `"${r.experience || ''}"`,
-        STATUS_LABELS[r.status],
-        r.totalPrice.toFixed(2).replace('.', ','),
-      ].join(';')
-    )
-    const csv = '\uFEFF' + [head.join(';'), ...rows].join('\n')
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-    a.download = `relatorio-${report.range.from || 'tudo'}-${report.range.to || 'atual'}.csv`
-    a.click()
-    URL.revokeObjectURL(a.href)
+    try {
+      const q = new URLSearchParams()
+      if (report.range.from) q.set('from', report.range.from)
+      if (report.range.to) q.set('to', report.range.to)
+      if (report.range.status !== 'todos') q.set('status', report.range.status)
+      const headers: Record<string, string> = {}
+      const token = getToken()
+      if (token) headers.Authorization = `Bearer ${token}`
+      const res = await fetch(`/api/reports/revenue/csv?${q}`, { headers })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Erro ao gerar o CSV.')
+      }
+      const blob = await res.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `relatorio-receitas-${report.range.from || 'tudo'}-${report.range.to || 'atual'}.csv`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao gerar o CSV.')
+    }
   }
 
   const exportPdf = async () => {

@@ -56,6 +56,18 @@ export type RevenueReportData = {
     status: string
     totalPrice: number
   }[]
+  ticketSales: {
+    id: string
+    code: string
+    date: Date
+    customerName: string | null
+    seller: string | null
+    paymentMethod: string
+    totalVisitors: number
+    totalPrice: number
+    reservationCode: string | null
+    items: { service: string; qty: number; unit: number; total: number }[]
+  }[]
 }
 
 async function collectRevenueReport(from: string, to: string, status: string): Promise<RevenueReportData> {
@@ -81,7 +93,10 @@ async function collectRevenueReport(from: string, to: string, status: string): P
     }),
     prisma.ticketSale.findMany({
       where: saleWhere,
-      include: { reservation: { select: { code: true } } },
+      include: {
+        reservation: { select: { code: true } },
+        seller: { select: { name: true } },
+      },
       orderBy: { date: 'asc' },
     }),
     prisma.reservationPayment.findMany({
@@ -183,7 +198,7 @@ async function collectRevenueReport(from: string, to: string, status: string): P
 
     for (const item of saleItems) {
       ticketsSold += item.qty
-      if (d.sold !== undefined) d.sold += item.qty
+      d.sold = (d.sold ?? 0) + item.qty
       const svc = byService.get(item.service) ?? { qty: 0, revenue: 0 }
       svc.qty += item.qty
       svc.revenue += item.total
@@ -244,6 +259,23 @@ async function collectRevenueReport(from: string, to: string, status: string): P
       status: r.status,
       totalPrice: r.totalPrice,
     })),
+    ticketSales: ticketSales.map((s) => {
+      const saleItems = Array.isArray((s as unknown as { items?: unknown }).items)
+        ? ((s as unknown as { items: { service: string; qty: number; unit: number; total: number }[] }).items ?? [])
+        : []
+      return {
+        id: s.id,
+        code: s.code,
+        date: s.date,
+        customerName: s.customerName,
+        seller: s.seller?.name || null,
+        paymentMethod: s.paymentMethod,
+        totalVisitors: s.totalVisitors,
+        totalPrice: s.totalPrice,
+        reservationCode: s.reservation?.code || null,
+        items: saleItems,
+      }
+    }),
   }
 }
 
@@ -271,6 +303,134 @@ router.get('/revenue/pdf', protect, allowRoles('ADMIN', 'MANAGER'), async (req, 
   } catch (err) {
     console.error('Erro ao gerar PDF do relatório:', err)
     res.status(500).json({ error: 'Erro ao gerar o PDF do relatório.' })
+  }
+})
+
+const CSV_METHOD_LABEL: Record<string, string> = {
+  CASH: 'Dinheiro',
+  MPESA: 'M-Pesa',
+  EMOLA: 'e-Mola',
+  CARD: 'Cartão / Multicaixa',
+  OTHER: 'Outro',
+}
+
+router.get('/revenue/csv', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res) => {
+  const from = String(req.query.from || '').slice(0, 10)
+  const to = String(req.query.to || '').slice(0, 10)
+  const status = String(req.query.status || 'todos')
+  try {
+    const report = await collectRevenueReport(from, to, status)
+    const s = report.summary
+    const num = (v: number) => v.toFixed(2).replace('.', ',')
+    const f = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const out: string[] = []
+
+    out.push('RELATÓRIO DE RECEITAS')
+    out.push(['Período', `${from || 'Início'} até ${to || 'Hoje'}`, `Estado: ${status}`].join(';'))
+    out.push('')
+
+    out.push('RESUMO')
+    out.push(
+      ['Reservas', 'Visitantes', 'Receita reservas (MT)', 'A receber (MT)', 'Vendas', 'Bilhetes', 'Receita vendas (MT)', 'Visitantes vendas', 'Receita total (MT)'].join(';')
+    )
+    out.push(
+      [s.reservations, s.visitors, num(s.revenue), num(s.pendingValue), s.ticketCount, s.ticketsSold, num(s.ticketRevenue), s.ticketVisitors, num(s.revenue + s.ticketRevenue)].join(';')
+    )
+    out.push('')
+
+    if (report.byDay.length > 0) {
+      out.push('MOVIMENTAÇÃO DIÁRIA')
+      out.push(['Data', 'Reservas', 'Visitantes', 'Receita reservas (MT)', 'Vendas', 'Bilhetes', 'Receita vendas (MT)', 'Visitantes vendas', 'Receita total (MT)'].join(';'))
+      for (const d of report.byDay) {
+        out.push(
+          [
+            d.name,
+            d.count,
+            d.visitors,
+            num(d.revenue - (d.ticketRevenue || 0)),
+            d.tickets || 0,
+            d.sold || 0,
+            num(d.ticketRevenue || 0),
+            d.ticketVisitors || 0,
+            num(d.revenue),
+          ].join(';')
+        )
+      }
+      out.push('')
+    }
+
+    if (report.ticketByMethod.length > 0) {
+      out.push('FORMAS DE PAGAMENTO (VENDAS)')
+      out.push(['Método', 'Nº vendas', 'Bilhetes', 'Receita (MT)'].join(';'))
+      for (const m of report.ticketByMethod) {
+        out.push([f(CSV_METHOD_LABEL[m.name] || m.name), m.count, m.qty, num(m.revenue)].join(';'))
+      }
+      out.push('')
+    }
+
+    if (report.byService.length > 0) {
+      out.push('SERVIÇOS')
+      out.push(['Serviço', 'Qtd', 'Receita (MT)'].join(';'))
+      for (const svc of report.byService) {
+        out.push([f(svc.name), svc.qty, num(svc.revenue)].join(';'))
+      }
+      out.push('')
+    }
+
+    if (report.reservations.length > 0) {
+      out.push('RESERVAS')
+      out.push(['Código', 'Data', 'Hora', 'Nome', 'Email', 'Telefone', 'Visitantes', 'Tipo', 'Experiência', 'Estado', 'Valor (MT)'].join(';'))
+      for (const r of report.reservations) {
+        out.push(
+          [
+            f(r.code),
+            r.date instanceof Date ? r.date.toISOString().slice(0, 10) : String(r.date).slice(0, 10),
+            f(r.time),
+            f(r.name),
+            f(r.email),
+            f(r.phone),
+            r.visitors,
+            f(r.visitType),
+            f(r.experience),
+            r.status,
+            num(r.totalPrice),
+          ].join(';')
+        )
+      }
+      out.push('')
+    }
+
+    if (report.ticketSales.length > 0) {
+      out.push('VENDAS DE ENTRADA')
+      out.push(['Código', 'Data', 'Cliente', 'Vendedor', 'Método', 'Visitantes', 'Itens', 'Reserva', 'Valor (MT)'].join(';'))
+      for (const t of report.ticketSales) {
+        const items = t.items.map((i) => `${i.service} (${i.qty} × ${num(i.total)})`).join(', ')
+        out.push(
+          [
+            f(t.code),
+            t.date instanceof Date ? t.date.toISOString().slice(0, 10) : String(t.date).slice(0, 10),
+            f(t.customerName),
+            f(t.seller),
+            f(CSV_METHOD_LABEL[t.paymentMethod] || t.paymentMethod),
+            t.totalVisitors,
+            f(items),
+            f(t.reservationCode),
+            num(t.totalPrice),
+          ].join(';')
+        )
+      }
+    }
+
+    const csv = '\uFEFF' + out.join('\n')
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="relatorio-receitas-${from || 'tudo'}-${to || 'atual'}.csv"`
+    )
+    res.send(csv)
+  } catch (err) {
+    console.error('Erro ao gerar CSV do relatório:', err)
+    res.status(500).json({ error: 'Erro ao gerar o CSV do relatório.' })
   }
 })
 
