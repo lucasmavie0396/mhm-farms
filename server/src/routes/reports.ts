@@ -41,7 +41,7 @@ router.get('/revenue', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res)
   ])
 
   const byStatus = new Map<string, { count: number; revenue: number; visitors: number }>()
-  const byDay = new Map<string, { count: number; revenue: number; visitors: number; tickets?: number; ticketRevenue?: number }>()
+  const byDay = new Map<string, { count: number; revenue: number; visitors: number; tickets?: number; ticketRevenue?: number; ticketVisitors?: number }>()
   const byService = new Map<string, { qty: number; revenue: number }>()
 
   for (const r of reservations) {
@@ -83,15 +83,17 @@ router.get('/revenue', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res)
   let ticketRevenue = 0
   let ticketVisitors = 0
   let ticketCount = ticketSales.length
+  let ticketsSold = 0
   const byMethod = new Map<string, { count: number; revenue: number }>()
   for (const s of ticketSales) {
     ticketRevenue += s.totalPrice
     ticketVisitors += s.totalVisitors
     const key = dayKey(s.date)
-    const d = byDay.get(key) ?? { count: 0, revenue: 0, visitors: 0, tickets: 0, ticketRevenue: 0 }
+    const d = byDay.get(key) ?? { count: 0, revenue: 0, visitors: 0, tickets: 0, ticketRevenue: 0, ticketVisitors: 0 }
     d.tickets = (d.tickets ?? 0) + 1
     d.revenue += s.totalPrice
     d.ticketRevenue = (d.ticketRevenue ?? 0) + s.totalPrice
+    d.ticketVisitors = (d.ticketVisitors ?? 0) + s.totalVisitors
     byDay.set(key, d)
 
     const m = byMethod.get(s.paymentMethod) ?? { count: 0, revenue: 0 }
@@ -103,6 +105,7 @@ router.get('/revenue', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res)
       ? ((s as unknown as { items: { service: string; qty: number; total: number }[] }).items ?? [])
       : []
     for (const item of saleItems) {
+      ticketsSold += item.qty
       const svc = byService.get(item.service) ?? { qty: 0, revenue: 0 }
       svc.qty += item.qty
       svc.revenue += item.total
@@ -131,10 +134,13 @@ router.get('/revenue', protect, allowRoles('ADMIN', 'MANAGER'), async (req, res)
       cancelled: byStatus.get('CANCELLED')?.count || 0,
       pending: byStatus.get('PENDING')?.count || 0,
       ticketCount,
+      ticketsSold,
       ticketRevenue,
       ticketVisitors,
     },
-    byDay: toList(byDay, (v) => v.revenue + (v.ticketRevenue ?? 0)),
+    byDay: [...byDay.entries()]
+      .map(([name, value]) => ({ name, ...value }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
     byStatus: toList(byStatus, (v) => v.revenue),
     byService: toList(byService, (v) => v.revenue),
     ticketByMethod: toList(byMethod, (v) => v.revenue),

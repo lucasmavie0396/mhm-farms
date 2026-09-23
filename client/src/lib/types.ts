@@ -274,10 +274,11 @@ export interface RevenueReport {
     cancelled: number
     pending: number
     ticketCount: number
+    ticketsSold: number
     ticketRevenue: number
     ticketVisitors: number
   }
-  byDay: { name: string; count: number; revenue: number; visitors: number; tickets?: number; ticketRevenue?: number }[]
+  byDay: { name: string; count: number; revenue: number; visitors: number; tickets?: number; ticketRevenue?: number; ticketVisitors?: number }[]
   byStatus: { name: string; count: number; revenue: number; visitors: number }[]
   byService: { name: string; qty: number; revenue: number }[]
   ticketByMethod: { name: string; count: number; revenue: number }[]
