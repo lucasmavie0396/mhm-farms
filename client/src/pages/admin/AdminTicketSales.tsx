@@ -84,6 +84,7 @@ export default function AdminTicketSales() {
       printReservationReceipt(out.reservation, out.sale, settings)
       setReservation(null)
       setResCode('')
+      loadSales()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao registar o pagamento.')
     } finally {
@@ -92,7 +93,9 @@ export default function AdminTicketSales() {
   }
 
   const loadSales = useCallback(() => {
-    return api<TicketSale[]>('/ticket-sales')
+    const d = new Date()
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    return api<TicketSale[]>(`/ticket-sales?from=${today}&to=${today}`)
       .then(setSales)
       .catch((err) => setError(err instanceof Error ? err.message : 'Erro ao carregar vendas.'))
       .finally(() => setLoading(false))
@@ -409,7 +412,7 @@ export default function AdminTicketSales() {
 
       <div className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-forest-100">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="font-display font-bold text-forest-900">Vendas recentes</h3>
+          <h3 className="font-display font-bold text-forest-900">Vendas de hoje</h3>
           <span className="text-sm font-semibold text-forest-800/60">{sales.length} vendas</span>
         </div>
         <div className="overflow-x-auto">
