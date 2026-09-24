@@ -3,6 +3,8 @@ import {
   BadgeCheck,
   Banknote,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   CreditCard,
   Minus,
   ReceiptText,
@@ -25,6 +27,11 @@ function money(value: number) {
   return formatMoney(value)
 }
 
+function todayStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export default function AdminTicketSales() {
   usePageMeta('Venda de entradas')
   const { settings } = useSettings()
@@ -34,6 +41,7 @@ export default function AdminTicketSales() {
   const [customer, setCustomer] = useState('')
   const [method, setMethod] = useState<PaymentMethod>('CASH')
   const [sales, setSales] = useState<TicketSale[]>([])
+  const [selDate, setSelDate] = useState(() => todayStr())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -84,7 +92,7 @@ export default function AdminTicketSales() {
       printReservationReceipt(out.reservation, out.sale, settings)
       setReservation(null)
       setResCode('')
-      loadSales()
+      loadSales(selDate)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao registar o pagamento.')
     } finally {
@@ -92,14 +100,18 @@ export default function AdminTicketSales() {
     }
   }
 
-  const loadSales = useCallback(() => {
-    const d = new Date()
-    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    return api<TicketSale[]>(`/ticket-sales?from=${today}&to=${today}`)
+  const loadSales = useCallback((date: string) => {
+    return api<TicketSale[]>(`/ticket-sales?from=${date}&to=${date}`)
       .then(setSales)
       .catch((err) => setError(err instanceof Error ? err.message : 'Erro ao carregar vendas.'))
       .finally(() => setLoading(false))
   }, [])
+
+  const shiftDate = (delta: number) => {
+    const d = new Date(`${selDate}T00:00:00`)
+    d.setDate(d.getDate() + delta)
+    setSelDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
+  }
 
   const sell = async () => {
     if (!hasItems || total <= 0) return
@@ -120,6 +132,7 @@ export default function AdminTicketSales() {
         }),
       })
       setSales((prev) => [sale, ...prev])
+      setSelDate(todayStr())
       setSuccess(`Venda ${sale.code} registada. A imprimir recibo…`)
       printSaleReceipt(sale, settings)
       reset()
@@ -131,11 +144,11 @@ export default function AdminTicketSales() {
   }
 
   useEffect(() => {
-    loadSales()
+    loadSales(selDate)
     api<Experience[]>('/experiences')
       .then((list) => setExperiences(list.filter((e) => e.active)))
       .catch(() => setExperiences([]))
-  }, [loadSales])
+  }, [loadSales, selDate])
 
   const prices = settings.prices || []
 
@@ -439,8 +452,39 @@ export default function AdminTicketSales() {
 
       <div className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-forest-100">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="font-display font-bold text-forest-900">Vendas de hoje</h3>
-          <span className="text-sm font-semibold text-forest-800/60">{sales.length} vendas</span>
+          <h3 className="font-display font-bold text-forest-900">Vendas</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => shiftDate(-1)}
+                className="btn-outline !px-2.5 !py-1.5"
+                title="Dia anterior"
+                aria-label="Dia anterior"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="min-w-[7.5rem] text-center text-sm font-bold text-forest-900">
+                {formatDateShort(selDate)}
+              </span>
+              <button
+                onClick={() => shiftDate(1)}
+                disabled={selDate === todayStr()}
+                className="btn-outline !px-2.5 !py-1.5 disabled:!opacity-30"
+                title="Dia seguinte"
+                aria-label="Dia seguinte"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            {selDate !== todayStr() && (
+              <button onClick={() => setSelDate(todayStr())} className="btn-outline !px-3 !py-1.5 !text-xs">
+                Hoje
+              </button>
+            )}
+          </div>
+          <span className="text-sm font-semibold text-forest-800/60">
+            {sales.length} venda{sales.length === 1 ? '' : 's'}
+          </span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-left text-sm">
@@ -493,7 +537,7 @@ export default function AdminTicketSales() {
               {sales.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-10 text-center text-sm text-forest-800/50">
-                    Ainda não há vendas registadas.
+                    Ainda não há vendas registadas neste dia.
                   </td>
                 </tr>
               )}
