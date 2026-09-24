@@ -129,7 +129,7 @@ export const ticketSaleSchema = z.object({
     .min(1),
   paymentMethod: z.enum(['CASH', 'MPESA', 'EMOLA', 'CARD', 'OTHER']),
   customerName: z.string().max(120).optional().nullable(),
-  experienceId: z.string().optional().nullable(),
+  experienceIds: z.array(z.string()).optional().nullable(),
 })
 
 export const schoolVisitSchema = z.object({

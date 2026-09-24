@@ -29,7 +29,7 @@ export default function AdminTicketSales() {
   usePageMeta('Venda de entradas')
   const { settings } = useSettings()
   const [qty, setQty] = useState<Record<string, number>>({})
-  const [experience, setExperience] = useState<string>('')
+  const [experienceIds, setExperienceIds] = useState<string[]>([])
   const [experiences, setExperiences] = useState<Experience[]>([])
   const [customer, setCustomer] = useState('')
   const [method, setMethod] = useState<PaymentMethod>('CASH')
@@ -107,15 +107,16 @@ export default function AdminTicketSales() {
     setError('')
     setSuccess('')
     try {
-      const items = lines.map((l) => ({ category: l.category, qty: l.qty }))
-      const expId = experiences.find((e) => e.id === experience) ? experience : null
+      const items = Object.entries(qty)
+        .filter(([, n]) => n > 0)
+        .map(([category, n]) => ({ category, qty: n }))
       const sale = await api<TicketSale>('/ticket-sales', {
         method: 'POST',
         body: JSON.stringify({
           items,
           paymentMethod: method,
           customerName: customer.trim() || null,
-          experienceId: expId,
+          experienceIds,
         }),
       })
       setSales((prev) => [sale, ...prev])
@@ -144,10 +145,12 @@ export default function AdminTicketSales() {
       const q = qty[p.category] || 0
       if (q > 0) out.push({ category: p.category, qty: q, price: p.price, total: p.price * q })
     }
-    const exp = experiences.find((e) => e.id === experience)
-    if (exp && exp.price > 0) out.push({ category: exp.title, qty: 1, price: exp.price, total: exp.price })
+    for (const exp of experiences) {
+      if (experienceIds.includes(exp.id) && exp.price > 0)
+        out.push({ category: exp.title, qty: 1, price: exp.price, total: exp.price })
+    }
     return out
-  }, [prices, qty, experiences, experience])
+  }, [prices, qty, experiences, experienceIds])
 
   const visitors = useMemo(
     () => prices.reduce((s, p) => s + (qty[p.category] || 0), 0),
@@ -163,9 +166,12 @@ export default function AdminTicketSales() {
     setQty(next)
   }
 
+  const toggleExperience = (id: string) =>
+    setExperienceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+
   const reset = () => {
     setQty({})
-    setExperience('')
+    setExperienceIds([])
     setCustomer('')
     setSuccess('')
   }
@@ -325,15 +331,36 @@ export default function AdminTicketSales() {
 
           {experiences.length > 0 && (
             <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-forest-100">
-              <h3 className="mb-3 font-display font-bold text-forest-900">Experiência opcional</h3>
-              <select value={experience} onChange={(e) => setExperience(e.target.value)}>
-                <option value="">Sem experiência</option>
-                {experiences.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.title} — {money(e.price)}
-                  </option>
-                ))}
-              </select>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-display font-bold text-forest-900">Experiências opcionais</h3>
+                {experienceIds.length > 0 && (
+                  <span className="badge bg-gold-400/15 text-gold-700">
+                    {experienceIds.length} selecionada{experienceIds.length > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {experiences.map((e) => {
+                  const checked = experienceIds.includes(e.id)
+                  return (
+                    <label
+                      key={e.id}
+                      className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-3 transition-colors ${
+                        checked ? 'border-gold-500 bg-gold-400/10' : 'border-forest-100 hover:bg-forest-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleExperience(e.id)}
+                        className="h-4 w-4 accent-gold-500"
+                      />
+                      <span className="flex-1 text-sm font-semibold text-forest-900">{e.title}</span>
+                      <span className="text-xs font-bold text-gold-700">{money(e.price)}</span>
+                    </label>
+                  )
+                })}
+              </div>
             </div>
           )}
 

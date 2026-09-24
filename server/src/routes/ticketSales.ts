@@ -9,20 +9,21 @@ import { buildTicketOrder } from '../lib/pricing'
 const router = Router()
 
 router.post('/', protect, allowRoles('ADMIN', 'MANAGER', 'STAFF'), validate(ticketSaleSchema), async (req, res) => {
-  const { items, paymentMethod, customerName, experienceId } = req.body
+  const { items, paymentMethod, customerName, experienceIds } = req.body
   const sellerId = req.user?.id
   if (!sellerId) {
     res.status(401).json({ error: 'Não autenticado.' })
     return
   }
-  const experience = experienceId
-    ? await prisma.experience.findUnique({ where: { id: experienceId }, select: { title: true, price: true } })
-    : null
+  const experiences =
+    Array.isArray(experienceIds) && experienceIds.length > 0
+      ? await prisma.experience.findMany({ where: { id: { in: experienceIds } }, select: { title: true, price: true } })
+      : []
   let saleItems: Awaited<ReturnType<typeof buildTicketOrder>>['items']
   let total: number
   let totalVisitors: number
   try {
-    const order = await buildTicketOrder({ items, experience })
+    const order = await buildTicketOrder({ items, experiences })
     saleItems = order.items
     total = order.total
     totalVisitors = order.totalVisitors

@@ -86,7 +86,7 @@ function buildTicketItems(
 
 export async function buildTicketOrder(opts: {
   items: { category: string; qty: number }[]
-  experience?: { title: string; price: number } | null
+  experiences?: { title: string; price: number }[]
 }): Promise<{ items: PriceBreakdown; total: number; totalVisitors: number }> {
   const pricesSetting = await prisma.setting.findUnique({ where: { key: 'prices' } })
   let prices: { category: string; price: number }[] = []
@@ -116,13 +116,17 @@ export async function buildTicketOrder(opts: {
     totalVisitors += line.qty
   }
 
-  if (opts.experience && opts.experience.price > 0) {
-    items.push({
-      service: opts.experience.title,
-      qty: 1,
-      unit: opts.experience.price,
-      total: opts.experience.price,
-    })
+  if (opts.experiences) {
+    for (const exp of opts.experiences) {
+      if (exp.price > 0) {
+        items.push({
+          service: exp.title,
+          qty: 1,
+          unit: exp.price,
+          total: exp.price,
+        })
+      }
+    }
   }
 
   const total = items.reduce((s, i) => s + i.total, 0)
